@@ -3,7 +3,7 @@ library(reticulate)
 library(DT)
 
 # Check if Python is available and load required Python modules
-use_python("C:\\Users\\TEKOWNER\\AppData\\Local\\Programs\\Python\\Python313\\python.exe")
+# use_python("C:\\Users\\TEKOWNER\\AppData\\Local\\Programs\\Python\\Python313\\python.exe")
 
 # Import Python utilities
 py_utils <- import_from_path("python_utils", path = ".")
