@@ -1,13 +1,66 @@
 library(shiny)
 library(reticulate)
 library(DT)
+library(readr)
+library(readxl)
+
+# Function to install Python dependencies from requirements.txt
+install_python_deps <- function() {
+  if (!file.exists("requirements.txt")) {
+    message("requirements.txt not found. Creating with default dependencies...")
+    default_reqs <- c(
+      "pandas>=1.3.0",
+      "numpy>=1.21.0",
+      "openpyxl>=3.0.7",
+      "matplotlib>=3.4.0",
+      "scikit-learn>=1.0.0",
+      "scipy>=1.8.0",
+      "python-dateutil>=2.8.2",
+      "pytz>=2020.1"
+    )
+    writeLines(default_reqs, "requirements.txt")
+  }
+  
+  message("Installing/updating Python dependencies from requirements.txt...")
+  reqs <- readLines("requirements.txt")
+  reqs <- reqs[!grepl("^\\s*#", reqs)]  # Remove comments
+  reqs <- trimws(reqs[reqs != ""])  # Remove empty lines and trim whitespace
+  
+  for (pkg in reqs) {
+    tryCatch({
+      message("Installing ", pkg, "...")
+      py_install(pkg, pip = TRUE)
+    }, error = function(e) {
+      warning("Failed to install ", pkg, ": ", conditionMessage(e))
+    })
+  }
+}
+
+# Install Python dependencies
+suppressWarnings({
+  tryCatch({
+    install_python_deps()
+  }, error = function(e) {
+    message("Warning: Could not install Python dependencies: ", conditionMessage(e))
+    message("Please install them manually using: pip install -r requirements.txt")
+  })
+})
 
 # Check if Python is available and load required Python modules
-use_python("C:\\Users\\TEKOWNER\\AppData\\Local\\Programs\\Python\\Python313\\python.exe")
-
-# Import Python utilities
-py_utils <- import_from_path("python_utils", path = ".")
-data_utils <- py_utils$data_utils
+tryCatch({
+  if (!py_available(initialize = TRUE)) {
+    stop("Python is not available. Please install Python and ensure it's in your PATH.")
+  }
+  
+  # Try to import Python utilities
+  if (!file.exists("python_utils")) {
+    stop("python_utils directory not found. Please ensure it exists in the app directory.")
+  }
+  py_utils <- import_from_path("python_utils", path = ".")
+  data_utils <- py_utils$data_utils
+}, error = function(e) {
+  stop("Error initializing Python: ", conditionMessage(e))
+})
 
 # UI definition with custom CSS
 ui <- tagList(
@@ -28,6 +81,16 @@ ui <- tagList(
         background-color: #286090;
         border-color: #204d74;
       }
+      .file-input-label {
+        font-weight: bold;
+        margin-bottom: 10px;
+        display: block;
+      }
+      .file-input-info {
+        margin-top: 5px;
+        font-size: 0.9em;
+        color: #666;
+      }
       .shiny-input-container {
         margin-bottom: 10px;
       }
@@ -40,7 +103,8 @@ ui <- tagList(
       sidebarPanel(
         radioButtons("dataSource", "Choose data source:",
                      choices = c("Use base file" = "base",
-                                 "Upload your own file" = "upload"),
+                                 "Upload your own file" = "upload",
+                                 "Online Databases" = "api"),
                      selected = "base"),
 
         # Conditional panel for base file selection
@@ -51,7 +115,7 @@ ui <- tagList(
             "Select base file:",
             choices = list.files(
               "Base_Data_Files",
-              pattern = "\\.xlsx$",
+              pattern = "\\.(xlsx|csv)$",
               full.names = FALSE),
             selected = NULL)
         ),
@@ -59,7 +123,23 @@ ui <- tagList(
         # Conditional panel for file upload
         conditionalPanel(
           condition = "input.dataSource == 'upload'",
-          fileInput("file1", "Choose Excel File", accept = ".xlsx")
+          fileInput("file1", 
+                   label = span("Choose File(s)", 
+                              class = "file-input-label"),
+                   multiple = TRUE,
+                   accept = c(".xlsx", ".xls", ".csv"),
+                   buttonLabel = "Browse..."),
+          div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files", 
+              class = "file-input-info")
+        ),
+        
+        # Conditional panel for online databases
+        conditionalPanel(
+          condition = "input.dataSource == 'api'",
+          selectInput("apiSource", "Select Data Source:",
+                      choices = c("Traffic", "Visual Crossing")),
+          # Placeholder for API-specific parameters
+          uiOutput("apiParams")
         ),
 
         actionButton("loadData", "Load Data"),
@@ -117,11 +197,37 @@ ui <- tagList(
 
 # Server logic
 server <- function(input, output, session) {
-  # Reactive value to store analysis results
+  # Reactive values
   analysis_results <- reactiveValues(
     result = NULL,
     plot = NULL
   )
+  
+  # Store merged data from multiple files
+  merged_data <- reactiveVal(NULL)
+  
+  # API parameters UI
+  output$apiParams <- renderUI({
+    req(input$apiSource)
+    
+    if (input$apiSource == "Traffic") {
+      tagList(
+        textInput("trafficLocation", "Location:", placeholder = "e.g., Boston, MA"),
+        dateRangeInput("trafficDates", "Date Range:", 
+                      start = Sys.Date() - 30, 
+                      end = Sys.Date())
+      )
+    } else if (input$apiSource == "Visual Crossing") {
+      tagList(
+        textInput("vcLocation", "Location:", placeholder = "e.g., Boston, MA"),
+        dateRangeInput("vcDates", "Date Range:", 
+                      start = Sys.Date() - 30, 
+                      end = Sys.Date()),
+        selectInput("vcUnitGroup", "Unit System:", 
+                    choices = c("Metric" = "metric", "US" = "us"))
+      )
+    }
+  })
   
   # Dynamic UI for analysis parameters
   output$analysisParams <- renderUI({
@@ -202,42 +308,91 @@ server <- function(input, output, session) {
   # Reactive value to store the loaded data
   data <- reactiveVal(NULL)
   
-  # Update base file dropdown when files change
-  observe({
-    updateSelectInput(session, "baseFile", 
-                      choices = list.files("Base_Data_Files", pattern = "\\.xlsx$", full.names = FALSE))
-  })
+  # Helper function to read different file types
+  read_data_file <- function(file_path, file_name) {
+    if (grepl("\\.xlsx?$", file_name, ignore.case = TRUE)) {
+      df <- readxl::read_excel(file_path)
+    } else if (grepl("\\.csv$", file_name, ignore.case = TRUE)) {
+      df <- readr::read_csv(file_path, show_col_types = FALSE)
+    } else {
+      stop("Unsupported file format")
+    }
+    return(df)
+  }
   
   # Load data when button is clicked
   observeEvent(input$loadData, {
     tryCatch({
       if (input$dataSource == "base" && !is.null(input$baseFile)) {
-        # Read from base file
+        # Load single base file
         file_path <- file.path("Base_Data_Files", input$baseFile)
-        if (file.exists(file_path)) {
-          df <- readxl::read_excel(file_path)
-          data(df)
-          showNotification(paste("Loaded base file:", input$baseFile), type = "message")
-        } else {
-          stop("Selected base file not found")
-        }
-      } else if (input$dataSource == "upload" && !is.null(input$file1)) {
-        # Read from uploaded file
-        df <- readxl::read_excel(input$file1$datapath)
+        df <- read_data_file(file_path, input$baseFile)
         data(df)
-        showNotification("Uploaded file loaded successfully!", type = "message")
-      } else {
-        stop("Please select a file or upload one")
+        merged_data(NULL)  # Reset merged data
+        showNotification(paste("Loaded base file:", input$baseFile), 
+                        type = "message")
+        
+      } else if (input$dataSource == "upload" && !is.null(input$file1)) {
+        # Handle multiple file uploads
+        files <- input$file1
+        dfs <- list()
+        
+        # Read all files
+        for (i in seq_len(nrow(files))) {
+          df <- read_data_file(files$datapath[i], files$name[i])
+          dfs[[files$name[i]]] <- df
+        }
+        
+        # If only one file, use it directly
+        if (length(dfs) == 1) {
+          data(dfs[[1]])
+          merged_data(NULL)
+          showNotification("File loaded successfully!", type = "message")
+          return()
+        }
+        
+        # For multiple files, check row counts
+        row_counts <- sapply(dfs, nrow)
+        if (length(unique(row_counts)) > 1) {
+          showModal(modalDialog(
+            title = "Incompatible Data",
+            "The selected files have different numbers of rows and cannot be merged.",
+            easyClose = TRUE,
+            footer = modalButton("OK")
+          ))
+          return()
+        }
+        
+        # Merge data frames by columns
+        merged_df <- do.call(cbind, dfs)
+        data(merged_df)
+        merged_data(merged_df)
+        showNotification(
+          paste("Successfully merged", length(dfs), "files with", 
+                nrow(merged_df), "rows and", ncol(merged_df), "columns"),
+          type = "message"
+        )
+        
+      } else if (input$dataSource == "api") {
+        # Placeholder for API data loading
+        showNotification("API integration will be implemented here", 
+                        type = "message")
+        return(NULL)
       }
     }, error = function(e) {
-      showNotification(paste("Error:", e$message), type = "error")
+      showNotification(paste("Error loading data:", e$message), 
+                      type = "error")
     })
   })
   
-  # Display the data table
+  # Data table output
   output$dataTable <- renderDT({
-    req(data())
-    datatable(data())
+    df <- data()
+    req(df)
+    datatable(df, 
+              options = list(scrollX = TRUE, 
+                           pageLength = 10,
+                           lengthMenu = c(5, 10, 15, 20)))
   })
   
   # Display summary statistics using Python
