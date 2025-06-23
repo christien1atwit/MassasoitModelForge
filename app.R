@@ -101,38 +101,9 @@ message("Python dependencies installed.")
 # UI definition with custom CSS
 ui <- tagList(
   tags$head(
-    tags$style(HTML("
-      .well {
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 10px;
-        margin-bottom: 20px;
-      }
-      .btn-primary {
-        background-color: #337ab7;
-        border-color: #2e6da4;
-      }
-      .btn-primary:hover {
-        background-color: #286090;
-        border-color: #204d74;
-      }
-      .file-input-label {
-        font-weight: bold;
-        margin-bottom: 10px;
-        display: block;
-      }
-      .file-input-info {
-        margin-top: 5px;
-        font-size: 0.9em;
-        color: #666;
-      }
-      .shiny-input-container {
-        margin-bottom: 10px;
-      }
-    "))
+    # Include the external CSS file
+    tags$link(rel = "stylesheet", type = "text/css", href = "app_design.css")
   ),
-
   fluidPage(
     titlePanel("Massasoit Model Forge"),
     sidebarLayout(
