@@ -11,63 +11,92 @@ library(geepack) # For GEE
 library(readr)
 library(readxl)
 
-# Function to install Python dependencies from requirements.txt
-install_python_deps <- function() {
-  if (!file.exists("requirements.txt")) {
-    message("requirements.txt not found. Creating with default dependencies...")
-    default_reqs <- c(
-      "pandas>=1.3.0",
-      "numpy>=1.21.0",
-      "openpyxl>=3.0.7",
-      "matplotlib>=3.4.0",
-      "scikit-learn>=1.0.0",
-      "scipy>=1.8.0",
-      "python-dateutil>=2.8.2",
-      "pytz>=2020.1"
-    )
-    writeLines(default_reqs, "requirements.txt")
-  }
-  
-  message("Installing/updating Python dependencies from requirements.txt...")
-  reqs <- readLines("requirements.txt")
-  reqs <- reqs[!grepl("^\\s*#", reqs)]  # Remove comments
-  reqs <- trimws(reqs[reqs != ""])  # Remove empty lines and trim whitespace
-  
-  for (pkg in reqs) {
-    tryCatch({
-      message("Installing ", pkg, "...")
-      py_install(pkg, pip = TRUE)
-    }, error = function(e) {
-      warning("Failed to install ", pkg, ": ", conditionMessage(e))
-    })
-  }
+# Define Conda environment name
+conda_env_name = "MassasoitModelForge_env"
+
+PYTHON_DEPENDENCIES = c('pip', 'numpy')
+
+# ------------------ App Miniconda setup ------------------- #
+
+# The error "Miniconda is already installed" confirms it's there.
+message("Miniconda is assumed to be installed and ready at path:", reticulate::miniconda_path())
+
+message(paste("Attempting to create/check Conda environment with name:", conda_env_name))
+
+# 2. Check if the Conda environment exists, create it if not.
+if (!(conda_env_name %in% reticulate::conda_list()$name)) {
+  message(paste("Creating Conda environment:", conda_env_name, "..."))
+  reticulate::conda_create(envname = conda_env_name, packages = c(paste0("python=", "3.10")))
+  message(paste("Conda environment", conda_env_name, "created."))
+} else {
+  message(paste("Conda environment", conda_env_name, "already exists."))
 }
 
-# Install Python dependencies
-suppressWarnings({
-  tryCatch({
-    install_python_deps()
-  }, error = function(e) {
-    message("Warning: Could not install Python dependencies: ", conditionMessage(e))
-    message("Please install them manually using: pip install -r requirements.txt")
-  })
-})
+# Important: Now tell reticulate to use this environment
+reticulate::use_condaenv(conda_env_name, required = TRUE)
 
-# Check if Python is available and load required Python modules
-tryCatch({
-  if (!py_available(initialize = TRUE)) {
-    stop("Python is not available. Please install Python and ensure it's in your PATH.")
-  }
+# Install Python dependencies into the environment
+message(paste("Installing Python dependencies:", paste(PYTHON_DEPENDENCIES, collapse = ", "), "into", conda_env_name))
+reticulate::py_install(PYTHON_DEPENDENCIES, envname = conda_env_name, pip = TRUE)
+message("Python dependencies installed.")
+
+# Function to install Python dependencies from requirements.txt
+# install_python_deps <- function() {
+#   if (!file.exists("requirements.txt")) {
+#     message("requirements.txt not found. Creating with default dependencies...")
+#     default_reqs <- c(
+#       "pandas>=1.3.0",
+#       "numpy>=1.21.0",
+#       "openpyxl>=3.0.7",
+#       "matplotlib>=3.4.0",
+#       "scikit-learn>=1.0.0",
+#       "scipy>=1.8.0",
+#       "python-dateutil>=2.8.2",
+#       "pytz>=2020.1"
+#     )
+#     writeLines(default_reqs, "requirements.txt")
+# #   }
   
-  # Try to import Python utilities
-  if (!file.exists("python_utils")) {
-    stop("python_utils directory not found. Please ensure it exists in the app directory.")
-  }
-  py_utils <- import_from_path("python_utils", path = ".")
-  data_utils <- py_utils$data_utils
-}, error = function(e) {
-  stop("Error initializing Python: ", conditionMessage(e))
-})
+#   message("Installing/updating Python dependencies from requirements.txt...")
+#   reqs <- readLines("requirements.txt")
+#   reqs <- reqs[!grepl("^\\s*#", reqs)]  # Remove comments
+#   reqs <- trimws(reqs[reqs != ""])  # Remove empty lines and trim whitespace
+  
+#   for (pkg in reqs) {
+#     tryCatch({
+#       message("Installing ", pkg, "...")
+#       py_install(pkg, pip = TRUE)
+#     }, error = function(e) {
+#       warning("Failed to install ", pkg, ": ", conditionMessage(e))
+#     })
+#   }
+# }
+
+# # Install Python dependencies
+# suppressWarnings({
+#   tryCatch({
+#     install_python_deps()
+#   }, error = function(e) {
+#     message("Warning: Could not install Python dependencies: ", conditionMessage(e))
+#     message("Please install them manually using: pip install -r requirements.txt")
+#   })
+# })
+
+# # Check if Python is available and load required Python modules
+# tryCatch({
+#   if (!py_available(initialize = TRUE)) {
+#     stop("Python is not available. Please install Python and ensure it's in your PATH.")
+#   }
+  
+#   # Try to import Python utilities
+#   if (!file.exists("python_utils")) {
+#     stop("python_utils directory not found. Please ensure it exists in the app directory.")
+#   }
+#   py_utils <- import_from_path("python_utils", path = ".")
+#   data_utils <- py_utils$data_utils
+# }, error = function(e) {
+#   stop("Error initializing Python: ", conditionMessage(e))
+# })
 
 # UI definition with custom CSS
 ui <- tagList(
