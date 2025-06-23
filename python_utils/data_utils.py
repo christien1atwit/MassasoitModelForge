@@ -72,16 +72,16 @@ def calculate_correlation(df, columns=None):
 
 def append_coord(df):
     coordinates = {
-        'LelandFarm' : [42.063835,-71.249616],
-        'SachemRock' : [42.018333,-70.951667],
-        'DunrovinFarm' : [42.003699,-70.840169],
+        'Leland Farm' : [42.063835,-71.249616],
+        'Sachem Rock' : [42.018333,-70.951667],
+        'Dunrovin Farm' : [42.003699,-70.840169],
         'Christos' : [42.06734,-71.00287],
-        'NativeMeadow' : [42.09107339,-71.04386531],
+        'Native Meadow' : [42.09107339,-71.04386531],
         'SoutheasternVocTech' : [42.183781,-71.101059],
         'Easton Powerline' : [42.183781,-71.101059],
-        'StonehillFarm' : [42.183781,-71.101059],
-        'VAHospital' : [42.183781,-71.101059],
-        'BeaverBrook' : [42.183781,-71.101059],
+        'Stonehill Farm' : [42.183781,-71.101059],
+        'VA Hospital' : [42.183781,-71.101059],
+        'Beaver Brook' : [42.183781,-71.101059],
         }
     df['lat'] = df['sample_site'].apply(lambda x: coordinates[x][0] if x in coordinates else None)
     df['lon'] = df['sample_site'].apply(lambda x: coordinates[x][1] if x in coordinates else None)

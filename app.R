@@ -72,31 +72,31 @@ message("Python dependencies installed.")
 #   }
 # }
 
-# # Install Python dependencies
-# suppressWarnings({
-#   tryCatch({
-#     install_python_deps()
-#   }, error = function(e) {
-#     message("Warning: Could not install Python dependencies: ", conditionMessage(e))
-#     message("Please install them manually using: pip install -r requirements.txt")
-#   })
-# })
+# Install Python dependencies
+suppressWarnings({
+  tryCatch({
+    install_python_deps()
+  }, error = function(e) {
+    message("Warning: Could not install Python dependencies: ", conditionMessage(e))
+    message("Please install them manually using: pip install -r requirements.txt")
+  })
+})
 
-# # Check if Python is available and load required Python modules
-# tryCatch({
-#   if (!py_available(initialize = TRUE)) {
-#     stop("Python is not available. Please install Python and ensure it's in your PATH.")
-#   }
+# Check if Python is available and load required Python modules
+tryCatch({
+  if (!py_available(initialize = TRUE)) {
+    stop("Python is not available. Please install Python and ensure it's in your PATH.")
+  }
   
-#   # Try to import Python utilities
-#   if (!file.exists("python_utils")) {
-#     stop("python_utils directory not found. Please ensure it exists in the app directory.")
-#   }
-#   py_utils <- import_from_path("python_utils", path = ".")
-#   data_utils <- py_utils$data_utils
-# }, error = function(e) {
-#   stop("Error initializing Python: ", conditionMessage(e))
-# })
+  # Try to import Python utilities
+  if (!file.exists("python_utils")) {
+    stop("python_utils directory not found. Please ensure it exists in the app directory.")
+  }
+  py_utils <- import_from_path("python_utils", path = ".")
+  data_utils <- py_utils$data_utils
+}, error = function(e) {
+  stop("Error initializing Python: ", conditionMessage(e))
+})
 
 # UI definition with custom CSS
 ui <- tagList(
@@ -277,6 +277,8 @@ server <- function(input, output, session) {
     } else {
       stop("Unsupported file format")
     }
+    py_df <- r_to_py(df)
+    df <- data_utils$append_coord(py_df)
     return(df)
   }
   
