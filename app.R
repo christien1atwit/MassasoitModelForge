@@ -322,44 +322,80 @@ server <- function(input, output, session) {
                            lengthMenu = c(5, 10, 15, 20)))
   })
 
-  # Display summary statistics using Python
-  output$summary <- renderPrint({
-    req(data())
-
-    # Convert R data to Python pandas DataFrame
-    py_run_string("import pandas as pd")
-    py$df <- r_to_py(data())
-
-    # Get summary using Python function
-    summary_result <- data_utils$get_data_summary(py$df)
-
-    # Format and display the summary
-    cat("Data Summary\n")
-    cat("===========\n\n")
-
-    cat("Number of rows:", summary_result$num_rows, "\n")
-    cat("Number of columns:", summary_result$num_columns, "\n\n")
-
-    cat("Column names:\n")
-    cat(paste(" - ", summary_result$column_names, collapse = "\n"), "\n\n")
-
-    cat("Data types:\n")
-    for (col in names(summary_result$data_types)) {
-      cat(" - ", col, ": ", summary_result$data_types[[col]], "\n")
-    }
-    cat("\n")
-
-    if (length(summary_result$missing_values) > 0) {
-      cat("Missing values:\n")
-      for (col in names(summary_result$missing_values)) {
-        if (summary_result$missing_values[[col]] > 0) {
-          cat(" - ", col, ": ", summary_result$missing_values[[col]], "\n")
-        }
+    output$summary <- renderPrint({
+      req(data())
+      df <- data()
+      cat("Data Summary\n")
+      cat("===========\n\n")
+      cat("Number of rows:", nrow(df), "\n")
+      cat("Number of columns:", ncol(df), "\n\n")
+      cat("Column names:\n")
+      cat(paste(" -", names(df)), sep = "\n")
+      cat("\n\n")
+      cat("Data types:\n")
+      for (col in names(df)) {
+        cat(" -", col, ":", class(df[[col]])[1], "\n")
       }
-    } else {
-      cat("No missing values found.\n")
-    }
-  })
+      cat("\n")
+      missing_vals <- sapply(df, function(x) sum(is.na(x)))
+      if (any(missing_vals > 0)) {
+        cat("Missing values:\n")
+        for (col in names(missing_vals)) {
+          if (missing_vals[[col]] > 0) {
+        cat(" -", col, ":", missing_vals[[col]], "\n")
+          }
+        }
+      } else {
+        cat("No missing values found.\n")
+      }
+      cat("\n")
+      cat("First few rows of data:\n")
+      print(utils::head(df, 5))
+})
+
+  #-----------Why are we using Python for summary statistics?
+  # Display summary statistics using Python
+  # output$summary <- renderPrint({
+  #   req(data())
+
+  #   # Convert R data to Python pandas DataFrame
+  #   py_run_string("import pandas as pd")
+  #   py_df <- r_to_py(data())
+
+  #   # Get summary using Python function
+  #   summary_result <- data_utils$get_data_summary(py_df)
+  #   # If you get a TypeError: 'module' object is not callable, try:
+  #   # summary_result <- py_utils$get_data_summary(py$df)
+  #   # Or, if get_data_summary is a function in the python_utils/data_utils.py file, ensure it is defined as a function.
+  #   # If you want to call a function from the module, make sure it's imported and referenced correctly.
+
+  #   # Format and display the summary
+  #   cat("Data Summary\n")
+  #   cat("===========\n\n")
+
+  #   cat("Number of rows:", summary_result$num_rows, "\n")
+  #   cat("Number of columns:", summary_result$num_columns, "\n\n")
+
+  #   cat("Column names:\n")
+  #   cat(paste(" - ", summary_result$column_names, collapse = "\n"), "\n\n")
+
+  #   cat("Data types:\n")
+  #   for (col in names(summary_result$data_types)) {
+  #     cat(" - ", col, ": ", summary_result$data_types[[col]], "\n")
+  #   }
+  #   cat("\n")
+
+  #   if (length(summary_result$missing_values) > 0) {
+  #     cat("Missing values:\n")
+  #     for (col in names(summary_result$missing_values)) {
+  #       if (summary_result$missing_values[[col]] > 0) {
+  #         cat(" - ", col, ": ", summary_result$missing_values[[col]], "\n")
+  #       }
+  #     }
+  #   } else {
+  #     cat("No missing values found.\n")
+  #   }
+  # })
 
 
   # Dynamic UI for analysis parameters
