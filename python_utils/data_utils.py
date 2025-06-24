@@ -1,8 +1,7 @@
-"""
-Data utility functions for Massasoit Model Forge.
+#Data utility functions for Massasoit Model Forge.
 
-This module contains Python functions that can be called from R using the reticulate package.
-"""
+#This module contains Python functions that can be called from R using the reticulate package.
+
 import pandas as pd
 import numpy as np
 
@@ -32,19 +31,15 @@ def clean_column_names(df, replace = True, spaces = False, firstupper = True):
         df.columns = df.columns.str.lower()
     return df
 
-
-
 def calculate_correlation(df, columns=None):
-    """
-    Calculate correlation between numeric columns.
     
-    Args:
-        df (pandas.DataFrame): Input data
-        columns (list, optional): List of columns to include. If None, all numeric columns are used.
-        
-    Returns:
-        pandas.DataFrame: Correlation matrix
-    """
+#Calculate correlation between numeric columns.    
+#    Args:
+#        df (pandas.DataFrame): Input data
+#        columns (list, optional): List of columns to include. If None, all numeric columns are used.        
+#    Returns:
+#        pandas.DataFrame: Correlation matrix
+
     if df is None or df.empty:
         return None
         
