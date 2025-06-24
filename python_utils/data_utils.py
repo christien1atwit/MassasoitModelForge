@@ -5,6 +5,8 @@ This module contains Python functions that can be called from R using the reticu
 """
 import pandas as pd
 import numpy as np
+import re
+import string as str
 
 def get_data_summary(df):
     """
@@ -28,23 +30,27 @@ def get_data_summary(df):
         "numeric_summary": df.describe(include=[np.number]).to_dict() if df.select_dtypes(include=[np.number]).shape[1] > 0 else {}
     }
 
-def clean_column_names(df):
-    """
-    Clean column names by converting to lowercase and replacing spaces with underscores.
-    
-    Args:
-        df (pandas.DataFrame): Input data
-        
-    Returns:
-        pandas.DataFrame: DataFrame with cleaned column names
-    """
+def clean_column_names(df, replace = True, spaces = True, firstupper = True):
     if df is None or df.empty:
         return df
-        
-    df.columns = df.columns.str.lower().str.replace(' ', '_')
+    
+    if replace:
+        df.columns = df.columns.str.replace('pu', 'Pick Up')
+        df.columns = df.columns.str.replace('pd', 'Put Down')
+
+    if spaces:
+        df.columns = df.columns.str.replace('_', ' ')
+    else:
+        df.columns = df.columns.str.replace(' ', '_')
+
+    if firstupper:
+        df.columns = df.columns.title()
+    else:
+        df.columns = df.columns.lower()
     return df
 
-# Example function that could be added later
+
+
 def calculate_correlation(df, columns=None):
     """
     Calculate correlation between numeric columns.
@@ -67,8 +73,6 @@ def calculate_correlation(df, columns=None):
         return None
         
     return df[numeric_cols].corr()
-
-# Add more utility functions here as needed
 
 def append_coord(df):
     site_column = next((col for col in df.columns if 'site' in col.lower()), None)
@@ -103,3 +107,4 @@ def append_coord(df):
         df['lat'] = df[site_column].apply(lambda x: coordinates[x][0] if x in coordinates else None)
         df['lon'] = df[site_column].apply(lambda x: coordinates[x][1] if x in coordinates else None)
     return df
+
