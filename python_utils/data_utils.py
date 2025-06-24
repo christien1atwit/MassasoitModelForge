@@ -5,30 +5,28 @@ This module contains Python functions that can be called from R using the reticu
 """
 import pandas as pd
 import numpy as np
-import re
-import string as str
 
-def get_data_summary(df):
-    """
-    Generate a summary of the input DataFrame.
+# def get_data_summary(df):
+#     """
+#     Generate a summary of the input DataFrame.
     
-    Args:
-        df (pandas.DataFrame): Input data
+#     Args:
+#         df (pandas.DataFrame): Input data
         
-    Returns:
-        dict: Dictionary containing various summary statistics
-    """
-    if df is None or df.empty:
-        return {"error": "No data provided"}
+#     Returns:
+#         dict: Dictionary containing various summary statistics
+#     """
+#     if df is None or df.empty:
+#         return {"error": "No data provided"}
         
-    return {
-        "num_rows": len(df),
-        "num_columns": len(df.columns),
-        "column_names": list(df.columns),
-        "data_types": {col: str(dtype) for col, dtype in df.dtypes.items()},
-        "missing_values": df.isnull().sum().to_dict(),
-        "numeric_summary": df.describe(include=[np.number]).to_dict() if df.select_dtypes(include=[np.number]).shape[1] > 0 else {}
-    }
+#     return {
+#         "num_rows": len(df),
+#         "num_columns": len(df.columns),
+#         "column_names": list(df.columns),
+#         "data_types": {col: str(dtype) for col, dtype in df.dtypes.items()},
+#         "missing_values": df.isnull().sum().to_dict(),
+#         "numeric_summary": df.describe(include=[np.number]).to_dict() if df.select_dtypes(include=[np.number]).shape[1] > 0 else {}
+#     }
 
 def clean_column_names(df, replace = True, spaces = False, firstupper = True):
     if df is None or df.empty:
