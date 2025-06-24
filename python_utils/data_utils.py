@@ -30,13 +30,20 @@ def get_data_summary(df):
         "numeric_summary": df.describe(include=[np.number]).to_dict() if df.select_dtypes(include=[np.number]).shape[1] > 0 else {}
     }
 
-def clean_column_names(df, replace = True, spaces = True, firstupper = True):
+def clean_column_names(df, replace = True, spaces = False, firstupper = True):
     if df is None or df.empty:
         return df
     
+    replacement_dictionary = {
+        'pu' : 'Pick Up',
+        'pd' : 'Put Down',
+        'lat' : 'Latitude',
+        'lon' : 'Longitude'
+    }
+    
     if replace:
-        df.columns = df.columns.str.replace('pu', 'Pick Up')
-        df.columns = df.columns.str.replace('pd', 'Put Down')
+        for key in replacement_dictionary.keys():   
+            df.columns = df.columns.str.replace(key, replacement_dictionary[key])
 
     if spaces:
         df.columns = df.columns.str.replace('_', ' ')
@@ -44,9 +51,9 @@ def clean_column_names(df, replace = True, spaces = True, firstupper = True):
         df.columns = df.columns.str.replace(' ', '_')
 
     if firstupper:
-        df.columns = df.columns.title()
+        df.columns = df.columns.str.title()
     else:
-        df.columns = df.columns.lower()
+        df.columns = df.columns.str.lower()
     return df
 
 
