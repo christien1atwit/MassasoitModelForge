@@ -186,8 +186,9 @@ ui <- tagList(
           tabPanel("Data", DTOutput("dataTable")),
           tabPanel("Summary", verbatimTextOutput("summary")),
           tabPanel("Analysis Results",
-                   verbatimTextOutput("analysisResults"),
-                   plotOutput("analysisPlot"))
+                  plotOutput("analysisPlot"),
+                  verbatimTextOutput("analysisResults"))
+                   
         )
       )
     )
@@ -405,32 +406,34 @@ server <- function(input, output, session) {
 
     if (input$analysisType == "") return(NULL)
 
-    data_cols <- names(data())
+    all_data_cols <- names(data())
+    num_data_cols <- names(data())[sapply(data(), is.numeric)]
+    char_data_cols <- names(data())[sapply(data(), is.character)]
 
     tagList(
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
         selectInput("responseVar", "Response Variable:",
-                    choices = data_cols)
+                    choices = num_data_cols)
       },
       
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectInput("predictorVars", "Predictor Variables:",
-                    choices = data_cols,
+                    choices = num_data_cols,
                     multiple = TRUE)
       },
       
       if (input$analysisType %in% c("glmm", "gamm")) {
         selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
-                       choices = data_cols,
+                       choices = char_data_cols,
                        multiple = TRUE,
                        options = list(create = TRUE, placeholder = "Type or select for random effects"))
       },
       
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
         selectInput("groupVar", "Grouping Variable:",
-                    choices = data_cols)
+                    choices = char_data_cols)
       },
       
       if (input$analysisType == "logistic") {
@@ -447,7 +450,7 @@ server <- function(input, output, session) {
       if (input$analysisType == "chisq") {
         tagList(
           selectInput("chisqVar", "Variable for Chi-squared Test:",
-                      choices = data_cols),
+                      choices = all_data_cols),
           numericInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
                        value = NULL,
                        placeholder = "e.g., 0.25, 0.75"),
@@ -457,8 +460,8 @@ server <- function(input, output, session) {
       
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
         tagList(
-          selectInput("var1", "Variable 1:", choices = data_cols),
-          selectInput("var2", "Variable 2:", choices = data_cols)
+          selectInput("var1", "Variable 1:", choices = all_data_cols),
+          selectInput("var2", "Variable 2:", choices = all_data_cols)
         )
       },
       # Add more specific parameters as needed for other models
