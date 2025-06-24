@@ -30,6 +30,7 @@ if (!(conda_env_name %in% reticulate::conda_list()$name)) {
 
 reticulate::use_condaenv(conda_env_name, required = TRUE)
 
+# Install Python dependencies
 install_python_deps <- function() {
   if (!file.exists("requirements.txt")) {
     message("requirements.txt not found. Creating with default dependencies...")
@@ -46,8 +47,6 @@ install_python_deps <- function() {
     writeLines(default_reqs, "requirements.txt")
    }
 }
-
-# Install Python dependencies
 suppressWarnings({
   tryCatch({
     install_python_deps()
@@ -62,7 +61,7 @@ tryCatch({
   if (!py_available(initialize = TRUE)) {
     stop("Python is not available. Please install Python and ensure it's in your PATH.")
   }
-  
+
   if (!file.exists("python_utils")) {
     stop("python_utils directory not found. Please ensure it exists in the app directory.")
   }
@@ -82,85 +81,104 @@ ui <- tagList(
     titlePanel("Massasoit Model Forge"),
     sidebarLayout(
       sidebarPanel(
-        radioButtons("dataSource", "Choose data source:",
-                     choices = c("Use base file" = "base",
-                                 "Upload your own file" = "upload",
-                                 "Online Databases" = "api"),
-                     selected = "base"),
-
-        # Conditional panel for base file selection
-        conditionalPanel(
-          condition = "input.dataSource == 'base'",
-          selectInput(
-            "baseFile",
-            "Select base file:",
-            choices = list.files(
-              "Base_Data_Files",
-              pattern = "\\.(xlsx|csv)$",
-              full.names = FALSE),
-            selected = NULL)
-        ),
-
-        # Conditional panel for file upload
-        conditionalPanel(
-          condition = "input.dataSource == 'upload'",
-          fileInput("file1", 
-                   label = span("Choose File(s)", 
-                              class = "file-input-label"),
-                   multiple = TRUE,
-                   accept = c(".xlsx", ".xls", ".csv"),
-                   buttonLabel = "Browse..."),
-          div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files", 
-              class = "file-input-info")
-        ),
-        
-        # Conditional panel for online databases
-        conditionalPanel(
-          condition = "input.dataSource == 'api'",
-          selectInput("apiSource", "Select Data Source:",
-                      choices = c("Traffic", "Visual Crossing")),
-          # Placeholder for API-specific parameters
-          uiOutput("apiParams")
-        ),
-
-        actionButton("loadData", "Load Data"),
-
-        # Analysis type selection
-        selectInput(
-          "analysisType",
-          "Select Analysis Type:",
-          choices = list(
-            "-- Select Analysis Type --" = "",
-            "Parametric/Semi-parametric" = list(
-              "GAM(M)s" = "gamm",
-              "GLM(M)s" = "glmm",
-              "Logistic Regression" = "logistic",
-              "ANOVA" = "anova",
-              "Linear Regression" = "linear",
-              "Generalized Estimating Equations" = "gee",
-              "Negative Binomial Regression" = "negbin"
+        tabsetPanel(
+          id = "sidebarTabs",
+            tabPanel(
+            "Data",
+            radioButtons("dataSource", "Choose data source:",
+                   choices = c("Use base file" = "base",
+                         "Upload your own file" = "upload",
+                         "Online Databases" = "api"),
+                   selected = "base"),
+            
+            # Conditional panel for base file selection
+            conditionalPanel(
+              condition = "input.dataSource == 'base'",
+              selectInput(
+              "baseFile",
+              "Select base file:",
+              choices = list.files(
+                "Base_Data_Files",
+                pattern = "\\.(xlsx|csv)$",
+                full.names = FALSE),
+              selected = NULL)
             ),
-            "Non-parametric" = list(
-              "GWR (Geographically Weighted Regression)" = "gwr", # Requires spatial data
-              "Goodness of Fit, Chi-squared test" = "chisq",
-              "Mann-Whitney U test" = "mannwhitney",
-              "Kruskal-Wallis test" = "kruskal",
-              "Zero Inflated Model" = "zeroinfl",
-              "Hurdle Model" = "hurdle",
-              "Sign test" = "signtest",
-              "Wilcoxon Signed-Rank test" = "wilcoxon",
-              "Spearman's Rank Correlation" = "spearman",
-              "Permutation signed rank test" = "permtest" # Placeholder, requires a specific package
-            )
+            
+            # Conditional panel for file upload
+            conditionalPanel(
+              condition = "input.dataSource == 'upload'",
+              fileInput("file1", 
+                  label = span("Choose File(s)", 
+                         class = "file-input-label"),
+                  multiple = TRUE,
+                  accept = c(".xlsx", ".xls", ".csv"),
+                  buttonLabel = "Browse..."),
+              div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files", 
+                class = "file-input-info")
+            ),
+            
+            # Conditional panel for online databases
+            conditionalPanel(
+              condition = "input.dataSource == 'api'",
+              selectInput("apiSource", "Select Data Source:",
+                    choices = c("Traffic", "Visual Crossing")),
+              # Placeholder for API-specific parameters
+              uiOutput("apiParams")
+            ),
+            
+            actionButton("loadData", "Load Data"),
+            
+            # Add JavaScript to switch to Analyze tab when Load Data is clicked
+            tags$script(HTML("
+              $(document).on('shiny:inputchanged', function(event) {
+              if (event.name === 'loadData' && event.value > 0) {
+                setTimeout(function() {
+                $('a[data-value=\"Analyze\"]').tab('show');
+                }, 300);
+              }
+              });
+            "))
           ),
-          selected = ""
-        ),
-
-        # Dynamic UI for analysis parameters
-        uiOutput("analysisParams"),
-
-        # Action button to run the selected analysis
-        actionButton("runAnalysis", "Run Analysis", class = "btn-primary")
+          tabPanel(
+            "Analyze",
+            # Analysis type selection
+            selectInput(
+              "analysisType",
+              "Select Analysis Type:",
+              choices = list(
+                "-- Select Analysis Type --" = "",
+                "Parametric/Semi-parametric" = list(
+                  "GAM(M)s" = "gamm",
+                  "GLM(M)s" = "glmm",
+                  "Logistic Regression" = "logistic",
+                  "ANOVA" = "anova",
+                  "Linear Regression" = "linear",
+                  "Generalized Estimating Equations" = "gee",
+                  "Negative Binomial Regression" = "negbin"
+                ),
+                "Non-parametric" = list(
+                  "GWR (Geographically Weighted Regression)" = "gwr", # Requires spatial data
+                  "Goodness of Fit, Chi-squared test" = "chisq",
+                  "Mann-Whitney U test" = "mannwhitney",
+                  "Kruskal-Wallis test" = "kruskal",
+                  "Zero Inflated Model" = "zeroinfl",
+                  "Hurdle Model" = "hurdle",
+                  "Sign test" = "signtest",
+                  "Wilcoxon Signed-Rank test" = "wilcoxon",
+                  "Spearman's Rank Correlation" = "spearman",
+                  "Permutation signed rank test" = "permtest" # Placeholder, requires a specific package
+                )
+              ),
+              selected = ""
+            ),
+            
+            # Dynamic UI for analysis parameters
+            uiOutput("analysisParams"),
+            
+            # Action button to run the selected analysis
+            actionButton("runAnalysis", "Run Analysis", class = "btn-primary")
+          )
+        )
       ),
       mainPanel(
         tabsetPanel(
@@ -195,15 +213,15 @@ server <- function(input, output, session) {
       tagList(
         textInput("trafficLocation", "Location:", placeholder = "e.g., Boston, MA"),
         dateRangeInput("trafficDates", "Date Range:", 
-                      start = Sys.Date() - 30, 
-                      end = Sys.Date())
+                       start = Sys.Date() - 30, 
+                       end = Sys.Date())
       )
     } else if (input$apiSource == "Visual Crossing") {
       tagList(
         textInput("vcLocation", "Location:", placeholder = "e.g., Boston, MA"),
         dateRangeInput("vcDates", "Date Range:", 
-                      start = Sys.Date() - 30, 
-                      end = Sys.Date()),
+                       start = Sys.Date() - 30, 
+                       end = Sys.Date()),
         selectInput("vcUnitGroup", "Unit System:", 
                     choices = c("Metric" = "metric", "US" = "us"))
       )
@@ -360,36 +378,36 @@ server <- function(input, output, session) {
         selectInput("responseVar", "Response Variable:",
                     choices = data_cols)
       },
-
+      
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectInput("predictorVars", "Predictor Variables:",
                     choices = data_cols,
                     multiple = TRUE)
       },
-
+      
       if (input$analysisType %in% c("glmm", "gamm")) {
         selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
-               choices = data_cols,
-               multiple = TRUE,
-               options = list(create = TRUE, placeholder = "Type or select for random effects"))
+                       choices = data_cols,
+                       multiple = TRUE,
+                       options = list(create = TRUE, placeholder = "Type or select for random effects"))
       },
-
+      
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
         selectInput("groupVar", "Grouping Variable:",
                     choices = data_cols)
       },
-
+      
       if (input$analysisType == "logistic") {
         selectInput("logisticFamily", "Family for Logistic Regression:",
                     choices = c("binomial", "quasibinomial"), selected = "binomial")
       },
-
+      
       if (input$analysisType == "glmm" || input$analysisType == "gee") {
         selectInput("glmmFamily", "Family for GLMM/GEE:",
                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                     selected = "poisson")
       },
-
+      
       if (input$analysisType == "chisq") {
         tagList(
           selectInput("chisqVar", "Variable for Chi-squared Test:",
@@ -400,7 +418,7 @@ server <- function(input, output, session) {
           helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
         )
       },
-
+      
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
         tagList(
           selectInput("var1", "Variable 1:", choices = data_cols),
@@ -474,7 +492,7 @@ server <- function(input, output, session) {
         # Users might need more control here for specific smooth terms
         formula_str_parts <- lapply(input$predictorVars, function(v) paste0("s(", v, ")"))
         formula_str <- paste(input$responseVar, "~", paste(formula_str_parts, collapse = " + "))
-
+        
         # If random effects are selected, add them to the GAMM formula
         if (!is.null(input$randomEffect) && length(input$randomEffect) > 0) {
             random_formula_str <- paste(input$randomEffect, collapse = " + ")
