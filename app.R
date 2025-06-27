@@ -532,17 +532,17 @@ server <- function(input, output, session) {
       if (input$analysisType == "chisq") {
         tagList(
           selectizeInput("chisqVar", "Variable for Chi-squared Test:",
-                       choices = all_data_cols,
-                       options = list(render = I(
-                         '{
-                           item: function(item, escape) { 
-                             return "<div>" + escape(item.label) + "</div>"; 
-                           }
-                         }'
-                       ))),
-          numericInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
-                       value = NULL,
-                       placeholder = "e.g., 0.25, 0.75"),
+                        choices = all_data_cols,
+                        options = list(render = I(
+                          '{
+                            item: function(item, escape) { 
+                              return "<div>" + escape(item.label) + "</div>"; 
+                            }
+                          }'
+                        ))),
+          textInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
+                    value = "",
+                    placeholder = "e.g., 0.25, 0.75"),
           helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
         )
       },
@@ -598,9 +598,19 @@ server <- function(input, output, session) {
         model <- lm(as.formula(formula_str), data = df)
         current_analysis_result$summary <- summary(model)
         current_analysis_result$plot <- function() {
-          par(mfrow = c(2,2)) # Set up plotting area for diagnostic plots
-          plot(model)
-          par(mfrow = c(1,1)) # Reset plotting area
+          # If only one predictor, plot regression line
+          if (length(input$predictorVars) == 1) {
+            predictor <- input$predictorVars[1]
+            plot(df[[predictor]], df[[input$responseVar]],
+                 xlab = predictor, ylab = input$responseVar,
+                 main = paste("Linear Regression:", input$responseVar, "vs", predictor))
+            abline(model, col = "blue", lwd = 2)
+          } else {
+           # For multiple predictors, show diagnostic plots
+           par(mfrow = c(2,2))
+           plot(model)
+           par(mfrow = c(1,1))
+          }
         }
       } else if (input$analysisType == "logistic") {
         req(input$responseVar, input$predictorVars)
