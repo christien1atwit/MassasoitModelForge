@@ -2,14 +2,15 @@ library(shiny)
 library(reticulate)
 library(DT)
 library(readxl) # For reading Excel files
-library(lme4)   # For GLMMs
-library(mgcv)   # For GAMs/GAMMs
+library(lme4)   # For GLMMs (used by glmer and internally by gamm)
+library(mgcv)   # For GAMs/GAMMs (gamm, gam)
 library(MASS)   # For Negative Binomial Regression (glm.nb)
 library(pscl)   # For Zero-Inflated and Hurdle models
-library(geepack) # For GEE
+library(geepack) # For GEE (geeglm)
 library(spgwr) # For GWR
 library(readr)
-library(readxl)
+# library(readxl) # Already loaded above
+# library(glue) # Only needed if using complex CSS for selectizeInput, removed now
 
 conda_env_name = "MassasoitModelForge_env"
 
@@ -46,6 +47,9 @@ install_python_deps <- function() {
     )
     writeLines(default_reqs, "requirements.txt")
    }
+  # Attempt to install dependencies from requirements.txt
+  reticulate::py_install(packages = "pip", pip = TRUE, envname = conda_env_name) # Ensure pip is available
+  reticulate::py_run_string("import subprocess; subprocess.check_call(['pip', 'install', '-r', 'requirements.txt'])")
 }
 suppressWarnings({
   tryCatch({
@@ -62,7 +66,7 @@ tryCatch({
     stop("Python is not available. Please install Python and ensure it's in your PATH.")
   }
 
-  if (!file.exists("python_utils")) {
+  if (!file.exists("python_utils") || !dir.exists("python_utils")) {
     stop("python_utils directory not found. Please ensure it exists in the app directory.")
   }
   py_utils <- import_from_path("python_utils", path = ".")
@@ -421,55 +425,55 @@ server <- function(input, output, session) {
       print(utils::head(df, 5))
 })
 
+  # Reactive expression to generate formatted choices for selectizeInputs
+  # This ensures choices are computed once when data changes, and then used by renderUI
+  formatted_choices <- reactive({
+    df <- data()
+    if (is.null(df)) {
+      return(list(
+        all_data_cols_formatted = character(0),
+        num_data_cols_formatted = character(0),
+        char_data_cols_formatted = character(0)
+      ))
+    }
+
+    non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
+    total_rows <- nrow(df)
+
+    # Helper function to format choices with N values directly in the label
+    format_func <- function(vars) {
+      setNames(
+        vars,
+        paste0(vars, " (N = ", non_na_counts[vars], " / ", total_rows, ")")
+      )
+    }
+
+    list(
+      all_data_cols_formatted = format_func(names(df)),
+      num_data_cols_formatted = format_func(names(df)[sapply(df, is.numeric)]),
+      char_data_cols_formatted = format_func(names(df)[sapply(df, is.character)])
+    )
+  })
+
   output$analysisParams <- renderUI({
     req(input$analysisType)
-    req(data()) 
+    req(data()) # Ensure data is loaded
 
     if (input$analysisType == "") return(NULL)
 
-    # Get data and calculate non-NA counts
-    df <- data()
-    non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
-    total_rows <- nrow(df)
-    
-    # This is my attempt at right-aligning da N values
-    css_rules <- lapply(seq_along(non_na_counts), function(i) {
-      glue::glue(
-        ".selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}']::after {{
-          content: 'N = {non_na_counts[i]} / {total_rows}';
-          float: right;
-          color: #777;
-          margin-left: 10px;
-        }}
-        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}']:hover::after {{
-          color: #000;
-        }}
-        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}'].active::after {{
-          color: #000;
-        }}
-        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}'].selected::after {{
-          color: #fff;
-        }}"
-      )
-    }) %>% paste(collapse = "\n")
+    # Get formatted choices from the reactive expression
+    choices_list <- formatted_choices()
+    all_data_cols <- choices_list$all_data_cols_formatted
+    num_data_cols <- choices_list$num_data_cols_formatted
+    char_data_cols <- choices_list$char_data_cols_formatted
 
-    # Format variable names (without N values in the text, they'll be added via CSS)
-    format_vars <- function(vars) {
-      setNames(vars, vars)
-    }
 
-    all_data_cols <- format_vars(names(df))
-    num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
-    char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
-
-    # Include the CSS in the UI
     tagList(
-      tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
         selectizeInput("responseVar", "Response Variable:",
-                     choices = num_data_cols,
+                     choices = num_data_cols, # Use formatted choices directly
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -481,7 +485,7 @@ server <- function(input, output, session) {
       
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols,
+                     choices = num_data_cols, # Use formatted choices directly
                      multiple = TRUE,
                      options = list(
                        render = I('{
@@ -492,14 +496,43 @@ server <- function(input, output, session) {
                      ))
       },
       
-      if (input$analysisType %in% c("glmm", "gamm")) {
-        selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
-                       choices = char_data_cols,
+      # GLMM specific random effect input
+      if (input$analysisType == "glmm") {
+        selectizeInput("glmmRandomEffectVars", "GLMM Random Effect Grouping Variables (Intercepts only):",
+                       choices = char_data_cols, # Use formatted choices directly
                        multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects",
+                       options = list(placeholder = "Select grouping variable(s) for random intercepts",
                        render = I('{
                          item: function(item, escape) { 
-                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+
+      # GAMM specific random effect input
+      if (input$analysisType == "gamm") {
+        selectizeInput("gammRandomEffectVars", "GAMM Random Effect Grouping Variables (Intercepts only):",
+                       choices = char_data_cols, # Use formatted choices directly
+                       multiple = TRUE,
+                       options = list(placeholder = "Select grouping variable(s) for random intercepts",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+      
+      # GEE specific ID variable input
+      if (input$analysisType == "gee") {
+        selectizeInput("geeIdVar", "GEE Cluster ID Variable (Select one):",
+                       choices = char_data_cols, # Use formatted choices directly
+                       multiple = FALSE, # Only one ID variable allowed for GEE
+                       options = list(placeholder = "Select one ID variable",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
                          }
                        }')
                      ))
@@ -507,7 +540,7 @@ server <- function(input, output, session) {
       
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
         selectizeInput("groupVar", "Grouping Variable:",
-                     choices = char_data_cols,
+                     choices = char_data_cols, # Use formatted choices directly
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -524,7 +557,7 @@ server <- function(input, output, session) {
       },
       
       if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+        selectInput("glmmFamily", "Family for GLMM/GEE:", # Changed to selectInput as it's simpler and doesn't needs dynamic search
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
       },
@@ -532,7 +565,7 @@ server <- function(input, output, session) {
       if (input$analysisType == "chisq") {
         tagList(
           selectizeInput("chisqVar", "Variable for Chi-squared Test:",
-                        choices = all_data_cols,
+                        choices = all_data_cols, # Use formatted choices directly
                         options = list(render = I(
                           '{
                             item: function(item, escape) { 
@@ -550,7 +583,7 @@ server <- function(input, output, session) {
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
         tagList(
           selectizeInput("var1", "Variable 1:", 
-                       choices = all_data_cols,
+                       choices = all_data_cols, # Use formatted choices directly
                        options = list(render = I(
                          '{
                            item: function(item, escape) { 
@@ -559,7 +592,7 @@ server <- function(input, output, session) {
                          }'
                        ))),
           selectizeInput("var2", "Variable 2:", 
-                       choices = all_data_cols,
+                       choices = all_data_cols, # Use formatted choices directly
                        options = list(render = I(
                          '{
                            item: function(item, escape) { 
@@ -630,34 +663,126 @@ server <- function(input, output, session) {
           }
         }
       } else if (input$analysisType == "glmm") {
-        req(input$responseVar, input$predictorVars, input$randomEffect)
-        # Construct formula with fixed and random effects
+        req(input$responseVar, input$predictorVars)
+        # Construct fixed effects formula
         fixed_formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        random_formula_str <- paste(fixed_formula_str, "+", paste(input$randomEffect, collapse = " + "))
+        
+        # Construct random effects part for lme4 (glmer) using selected grouping variables
+        random_effects_parts <- NULL
+        if (!is.null(input$glmmRandomEffectVars) && length(input$glmmRandomEffectVars) > 0) {
+            # For each selected grouping variable, add a random intercept term (1|group)
+            random_effects_parts <- paste0("(1|", input$glmmRandomEffectVars, ")", collapse = " + ")
+        }
 
-        model <- glmer(as.formula(random_formula_str), family = input$glmmFamily, data = df)
+        # Combine fixed and random effects into a single formula string
+        full_formula_str <- fixed_formula_str
+        if (!is.null(random_effects_parts)) {
+            full_formula_str <- paste(full_formula_str, "+", random_effects_parts)
+        }
+        
+        # Fit GLMM
+        model <- glmer(as.formula(full_formula_str), family = input$glmmFamily, data = df)
         current_analysis_result$summary <- summary(model)
         current_analysis_result$plot <- function() {
-          plot(model, main = "GLMM Residuals vs. Fitted")
+          # Common GLMM plots: residuals vs. fitted, QQ plot
+          par(mfrow = c(2,2))
+          plot(model)
+          par(mfrow = c(1,1))
         }
       } else if (input$analysisType == "gamm") {
         req(input$responseVar, input$predictorVars)
-        # GAM formula can be complex, for simplicity, using s() for smoothing on all predictors
-        # Users might need more control here for specific smooth terms
-        formula_str_parts <- lapply(input$predictorVars, function(v) paste0("s(", v, ")"))
-        formula_str <- paste(input$responseVar, "~", paste(formula_str_parts, collapse = " + "))
         
-        # If random effects are selected, add them to the GAMM formula
-        if (!is.null(input$randomEffect) && length(input$randomEffect) > 0) {
-            random_formula_str <- paste(input$randomEffect, collapse = " + ")
-            formula_str <- paste(formula_str, "+", random_formula_str)
+        # --- Debugging and improved error handling for GAMM ---
+        current_analysis_result$summary <- "GAMM analysis started..."
+        current_analysis_result$plot <- function() {
+          plot(1,1, type = "n", main = "GAMM plot will appear here.")
         }
 
-        model <- gam(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(model, pages = 1, main = "GAM Smooth Terms") # Plots smooth terms
-        }
+        tryCatch({
+          # Ensure grouping variables are factors
+          df_gamm <- df # Work on a copy to avoid modifying original reactive data
+          if (!is.null(input$gammRandomEffectVars) && length(input$gammRandomEffectVars) > 0) {
+              for (re_var in input$gammRandomEffectVars) {
+                  if (re_var %in% names(df_gamm)) {
+                      df_gamm[[re_var]] <- as.factor(df_gamm[[re_var]])
+                      message(paste("Converted random effect variable", re_var, "to factor."))
+                  } else {
+                      stop(paste("Random effect variable '", re_var, "' not found in data."))
+                  }
+              }
+          }
+
+          # Construct fixed effects and smooth terms formula for GAMM
+          # Ensure predictorVars are numeric
+          clean_predictor_vars <- c()
+          for (v in input$predictorVars) {
+              if (v %in% names(df_gamm) && is.numeric(df_gamm[[v]])) {
+                  clean_predictor_vars <- c(clean_predictor_vars, v)
+              } else {
+                  warning(paste("Predictor variable '", v, "' is not numeric or not found. Skipping for GAMM smooth term."))
+              }
+          }
+          
+          if (length(clean_predictor_vars) == 0) {
+            stop("No valid numeric predictor variables selected for GAMM smooth terms.")
+          }
+
+          fixed_smooth_formula_parts <- lapply(clean_predictor_vars, function(v) paste0("s(", v, ")"))
+          fixed_formula_str <- paste(input$responseVar, "~", paste(fixed_smooth_formula_parts, collapse = " + "))
+          message(paste("GAMM fixed/smooth formula:", fixed_formula_str))
+          
+          # Prepare random effects for gamm() in the required list format
+          random_effect_list <- NULL
+          if (!is.null(input$gammRandomEffectVars) && length(input$gammRandomEffectVars) > 0) {
+              random_effect_list <- list()
+              for (re_var in input$gammRandomEffectVars) {
+                  random_effect_list[[re_var]] <- as.formula("~ 1") 
+              }
+              message(paste("GAMM random effect list:", deparse(random_effect_list)))
+          }
+
+          # Fit GAMM model using mgcv::gamm
+          if (!is.null(random_effect_list) && length(random_effect_list) > 0) {
+              model_fit <- gamm(as.formula(fixed_formula_str), random = random_effect_list, data = df_gamm)
+              # The summary for GAMM is typically taken from the 'gam' component
+              current_analysis_result$summary <- summary(model_fit$gam) 
+              current_analysis_result$plot <- function() {
+                # Plot smooth terms from the GAM part
+                par(mfrow = c(1,2)) 
+                plot(model_fit$gam, pages = 1, main = "GAMM Smooth Terms")
+                # Optionally, plot diagnostics from the LME part if it exists
+                if (!is.null(model_fit$lme)) {
+                    plot(fitted(model_fit$lme), residuals(model_fit$lme),
+                         xlab = "Fitted Values (LME)", ylab = "Residuals (LME)",
+                         main = "GAMM: LME Residuals vs. Fitted")
+                    abline(h = 0, col = "red", lty = 2)
+                }
+                par(mfrow = c(1,1))
+              }
+          } else {
+              message("No random effects selected for GAMM, falling back to simple GAM.")
+              # Fallback to simple GAM if no random effects selected
+              model_fit <- gam(as.formula(fixed_formula_str), data = df_gamm)
+              current_analysis_result$summary <- summary(model_fit)
+              current_analysis_result$plot <- function() {
+                par(mfrow = c(2,2))
+                plot(model_fit, pages = 1, main = "GAM Smooth Terms")
+                par(mfrow = c(1,1))
+              }
+          }
+        }, error = function(e) {
+          error_message <- paste("Error running GAMM:", e$message)
+          showNotification(error_message, type = "error", duration = 8)
+          current_analysis_result$summary <- paste("GAMM Error:\n", error_message, "\n\n",
+                                                  "Please check:\n",
+                                                  "- Are response and predictor variables numeric?\n",
+                                                  "- Are grouping variables categorical (factors)?\n",
+                                                  "- Is there enough data within each group for random effects?")
+          current_analysis_result$plot <- NULL
+          message(paste("GAMM Error caught:", e$message)) # For console debugging
+        })
+        # --- End of GAMM debugging and error handling ---
+
       } else if (input$analysisType == "anova") {
         req(input$responseVar, input$groupVar)
         formula_str <- paste(input$responseVar, "~", input$groupVar)
@@ -669,18 +794,15 @@ server <- function(input, output, session) {
                   xlab = input$groupVar, ylab = input$responseVar)
         }
       } else if (input$analysisType == "gee") {
-        req(input$responseVar, input$predictorVars, input$randomEffect) # randomEffect for GEE's id
+        req(input$responseVar, input$predictorVars, input$geeIdVar) # Use the new geeIdVar input
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        # GEE requires an 'id' variable for clustering
-        if (length(input$randomEffect) == 1) {
-          model <- geeglm(as.formula(formula_str), id = df[[input$randomEffect]],
-                          family = input$glmmFamily, data = df)
-          current_analysis_result$summary <- summary(model)
-          current_analysis_result$plot <- function() {
-            plot(1,1, type = "n", main = "GEE plots often involve residuals or predictions, needs custom implementation.")
-          }
-        } else {
-          stop("For GEE, please select exactly one random effect variable to serve as the 'id' for clustering.")
+        
+        # GEE requires a single 'id' variable for clustering
+        model <- geeglm(as.formula(formula_str), id = df[[input$geeIdVar]],
+                        family = input$glmmFamily, data = df)
+        current_analysis_result$summary <- summary(model)
+        current_analysis_result$plot <- function() {
+          plot(1,1, type = "n", main = "GEE plots often involve residuals or predictions, needs custom implementation.")
         }
       } else if (input$analysisType == "negbin") {
         req(input$responseVar, input$predictorVars)
@@ -688,7 +810,9 @@ server <- function(input, output, session) {
         model <- glm.nb(as.formula(formula_str), data = df)
         current_analysis_result$summary <- summary(model)
         current_analysis_result$plot <- function() {
-          plot(model, main = "Negative Binomial Regression Diagnostics")
+          par(mfrow = c(2,2)) # For diagnostic plots if available
+          plot(model)
+          par(mfrow = c(1,1))
         }
       } else if (input$analysisType == "chisq") {
         req(input$chisqVar)
@@ -765,9 +889,6 @@ server <- function(input, output, session) {
         req(input$responseVar, input$groupVar)
         # Sign test typically for paired data or comparing median to a value.
         # For simplicity, assuming a paired-like comparison for now.
-        # You'll need to define how 'paired' data is structured for this.
-        # Example: comparing two groups, assumes equal sample size for simplicity.
-        # A more robust implementation would check for paired samples.
         group_levels <- unique(df[[input$groupVar]])
         if (length(group_levels) != 2) {
           stop("Sign test requires exactly two groups for comparison.")
@@ -806,7 +927,6 @@ server <- function(input, output, session) {
         # Wilcoxon Signed-Rank Test is for paired data, similar to sign test
         # Wilcoxon Rank-Sum Test (Mann-Whitney U) is for unpaired.
         # Assuming you mean Wilcoxon Rank-Sum test for two groups here.
-        # If paired, you'd need to modify data input.
         formula_str <- paste(input$responseVar, "~", input$groupVar)
         test_result <- wilcox.test(as.formula(formula_str), data = df)
         current_analysis_result$summary <- test_result
