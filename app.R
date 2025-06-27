@@ -232,19 +232,86 @@ server <- function(input, output, session) {
   # Reactive value to store the loaded data
   data <- reactiveVal(NULL)
   
-  # Helper function to read different file types
+  # Helper function to read different file types with robust type handling
   read_data_file <- function(file_path, file_name) {
-    if (grepl("\\.xlsx?$", file_name, ignore.case = TRUE)) {
-      df <- readxl::read_excel(file_path)
-    } else if (grepl("\\.csv$", file_name, ignore.case = TRUE)) {
-      df <- readr::read_csv(file_path, show_col_types = FALSE)
-    } else {
-      stop("Unsupported file format")
+    # Function to safely convert columns to appropriate types
+    clean_and_convert <- function(df) {
+      # Convert all columns to character first to avoid type coercion warnings
+      df[] <- lapply(df, as.character)
+      
+      # Function to guess and convert column types
+      convert_column <- function(x) {
+        # Remove any non-numeric characters from potential numeric columns
+        clean_x <- gsub("[^0-9.-]", "", x)
+        
+        # Try to convert to numeric if possible
+        num_x <- suppressWarnings(as.numeric(clean_x))
+        if (!all(is.na(num_x)) && !all(is.na(x) | x == "")) {
+          return(num_x)
+        }
+        
+        # Check for logical values
+        if (all(tolower(x) %in% c("true", "false", "t", "f", "", NA))) {
+          return(as.logical(x))
+        }
+        
+        # Check for dates (simple check)
+        if (any(grepl("\\d{1,4}[-/]\\d{1,2}[-/]\\d{1,4}", x, ignore.case = TRUE))) {
+          date_x <- as.Date(x, optional = TRUE)
+          if (!all(is.na(date_x))) {
+            return(date_x)
+          }
+        }
+        
+        # Return as character if no other type fits
+        return(x)
+      }
+      
+      # Apply conversion to each column
+      df[] <- lapply(df, function(col) {
+        # Skip if column is already in a good format
+        if (is.numeric(col) || is.logical(col) || inherits(col, "Date")) {
+          return(col)
+        }
+        convert_column(col)
+      })
+      
+      return(df)
     }
-    py_df <- r_to_py(df)
-    df <- data_utils$append_coord(py_df)
-    py_df <- r_to_py(df)
-    df <- data_utils$clean_column_names(py_df)
+    
+    # Read the file with appropriate function
+    df <- tryCatch({
+      if (grepl("\\.xlsx?$", file_name, ignore.case = TRUE)) {
+        # For Excel files, read all as text first to avoid type guessing issues
+        suppressWarnings({
+          df <- readxl::read_excel(file_path, col_types = "text")
+        })
+      } else if (grepl("\\.csv$", file_name, ignore.case = TRUE)) {
+        # For CSV files, read all as character first
+        df <- readr::read_csv(file_path, col_types = cols(.default = col_character()), 
+                             show_col_types = FALSE)
+      } else {
+        stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
+      }
+      
+      # Clean and convert column types
+      df <- clean_and_convert(df)
+      
+      # Process with Python utilities if available
+      if (exists("data_utils")) {
+        py_df <- r_to_py(df)
+        df <- data_utils$append_coord(py_df)
+        py_df <- r_to_py(df)
+        df <- data_utils$clean_column_names(py_df)
+      }
+      
+      df
+    }, 
+    error = function(e) {
+      showNotification(paste("Error reading file:", e$message), type = "error")
+      return(NULL)
+    })
+    
     return(df)
   }
   
@@ -354,103 +421,125 @@ server <- function(input, output, session) {
       print(utils::head(df, 5))
 })
 
-  #-----------Why are we using Python for summary statistics?
-  # Display summary statistics using Python
-  # output$summary <- renderPrint({
-  #   req(data())
-
-  #   # Convert R data to Python pandas DataFrame
-  #   py_run_string("import pandas as pd")
-  #   py_df <- r_to_py(data())
-
-  #   # Get summary using Python function
-  #   summary_result <- data_utils$get_data_summary(py_df)
-  #   # If you get a TypeError: 'module' object is not callable, try:
-  #   # summary_result <- py_utils$get_data_summary(py$df)
-  #   # Or, if get_data_summary is a function in the python_utils/data_utils.py file, ensure it is defined as a function.
-  #   # If you want to call a function from the module, make sure it's imported and referenced correctly.
-
-  #   # Format and display the summary
-  #   cat("Data Summary\n")
-  #   cat("===========\n\n")
-
-  #   cat("Number of rows:", summary_result$num_rows, "\n")
-  #   cat("Number of columns:", summary_result$num_columns, "\n\n")
-
-  #   cat("Column names:\n")
-  #   cat(paste(" - ", summary_result$column_names, collapse = "\n"), "\n\n")
-
-  #   cat("Data types:\n")
-  #   for (col in names(summary_result$data_types)) {
-  #     cat(" - ", col, ": ", summary_result$data_types[[col]], "\n")
-  #   }
-  #   cat("\n")
-
-  #   if (length(summary_result$missing_values) > 0) {
-  #     cat("Missing values:\n")
-  #     for (col in names(summary_result$missing_values)) {
-  #       if (summary_result$missing_values[[col]] > 0) {
-  #         cat(" - ", col, ": ", summary_result$missing_values[[col]], "\n")
-  #       }
-  #     }
-  #   } else {
-  #     cat("No missing values found.\n")
-  #   }
-  # })
-
-
-  # Dynamic UI for analysis parameters
   output$analysisParams <- renderUI({
     req(input$analysisType)
-    req(data()) # Ensure data is loaded before rendering variable choices
+    req(data()) 
 
     if (input$analysisType == "") return(NULL)
 
-    all_data_cols <- names(data())
-    num_data_cols <- names(data())[sapply(data(), is.numeric)]
-    char_data_cols <- names(data())[sapply(data(), is.character)]
+    # Get data and calculate non-NA counts
+    df <- data()
+    non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
+    total_rows <- nrow(df)
+    
+    # This is my attempt at right-aligning da N values
+    css_rules <- lapply(seq_along(non_na_counts), function(i) {
+      glue::glue(
+        ".selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}']::after {{
+          content: 'N = {non_na_counts[i]} / {total_rows}';
+          float: right;
+          color: #777;
+          margin-left: 10px;
+        }}
+        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}']:hover::after {{
+          color: #000;
+        }}
+        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}'].active::after {{
+          color: #000;
+        }}
+        .selectize-dropdown-content .option[data-value='{names(non_na_counts)[i]}'].selected::after {{
+          color: #fff;
+        }}"
+      )
+    }) %>% paste(collapse = "\n")
 
+    # Format variable names (without N values in the text, they'll be added via CSS)
+    format_vars <- function(vars) {
+      setNames(vars, vars)
+    }
+
+    all_data_cols <- format_vars(names(df))
+    num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
+    char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
+
+    # Include the CSS in the UI
     tagList(
+      tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
-        selectInput("responseVar", "Response Variable:",
-                    choices = num_data_cols)
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = num_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
       },
       
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
-        selectInput("predictorVars", "Predictor Variables:",
-                    choices = num_data_cols,
-                    multiple = TRUE)
+        selectizeInput("predictorVars", "Predictor Variables:",
+                     choices = num_data_cols,
+                     multiple = TRUE,
+                     options = list(
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
       },
       
       if (input$analysisType %in% c("glmm", "gamm")) {
         selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
                        choices = char_data_cols,
                        multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects"))
+                       options = list(create = TRUE, placeholder = "Type or select for random effects",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
       },
       
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
-        selectInput("groupVar", "Grouping Variable:",
-                    choices = char_data_cols)
+        selectizeInput("groupVar", "Grouping Variable:",
+                     choices = char_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
       },
       
       if (input$analysisType == "logistic") {
-        selectInput("logisticFamily", "Family for Logistic Regression:",
-                    choices = c("binomial", "quasibinomial"), selected = "binomial")
+        selectizeInput("logisticFamily", "Family for Logistic Regression:",
+                     choices = c("binomial", "quasibinomial"), 
+                     selected = "binomial")
       },
       
       if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectInput("glmmFamily", "Family for GLMM/GEE:",
-                    choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
-                    selected = "poisson")
+        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
+                     selected = "poisson")
       },
       
       if (input$analysisType == "chisq") {
         tagList(
-          selectInput("chisqVar", "Variable for Chi-squared Test:",
-                      choices = all_data_cols),
+          selectizeInput("chisqVar", "Variable for Chi-squared Test:",
+                       choices = all_data_cols,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       ))),
           numericInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
                        value = NULL,
                        placeholder = "e.g., 0.25, 0.75"),
@@ -460,8 +549,24 @@ server <- function(input, output, session) {
       
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
         tagList(
-          selectInput("var1", "Variable 1:", choices = all_data_cols),
-          selectInput("var2", "Variable 2:", choices = all_data_cols)
+          selectizeInput("var1", "Variable 1:", 
+                       choices = all_data_cols,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       ))),
+          selectizeInput("var2", "Variable 2:", 
+                       choices = all_data_cols,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       )))
         )
       },
       # Add more specific parameters as needed for other models
