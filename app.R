@@ -1,4 +1,5 @@
 library(shiny)
+library(shinyjs) # For JavaScript operations in Shiny
 library(reticulate)
 library(DT)
 library(readxl) # For reading Excel files
@@ -10,6 +11,9 @@ library(geepack) # For GEE
 library(spgwr) # For GWR
 library(readr)
 library(readxl)
+
+# Initialize shinyjs
+shinyjs::useShinyjs()
 
 conda_env_name <- "MassasoitModelForge_env"
 
@@ -84,20 +88,74 @@ tryCatch({
 })
 
 # UI definition with custom CSS
-ui <- tagList(
+ui <- fluidPage(
+  useShinyjs(),
   tags$head(
     # Include the external CSS file
-    tags$link(rel = "stylesheet", type = "text/css", href = "app_design.css")
+    tags$link(rel = "stylesheet", type = "text/css", href = "app_design.css"),
+    # Add favicon
+    tags$link(rel = "icon", type = "image/png", href = "favicon.ico")
   ),
-  fluidPage(
-    titlePanel("Massasoit Model Forge"),
+  
+  # Landing Page
+  div(
+    id = "landingPage",
+    class = "landing-page",
+    div(
+      class = "landing-content",
+      h1("Welcome to the Massasoit Model Forge", class = "landing-title"),
+      div(class = "button-container",
+          actionButton("enterAppBtn", "Enter Application", class = "app-btn"),
+          actionButton("aboutBtn", "About Us", class = "app-btn")
+      )
+    )
+  ),
+  
+  # About Page
+  div(
+    id = "aboutPage",
+    class = "page",
+    style = "display: none;",
+    # Header with title and logo
+    div(class = "app-header",
+        div(class = "header-left",
+            actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
+        ),
+        div(class = "header-right",
+            a(href = "https://massasoit.edu/", target = "_blank", 
+              img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
+            )
+        )
+    ),
+    div(
+      class = "about-container",
+      h2("About Us"),
+      p("Information about Massasoit Model Forge will go here.")
+    )
+  ),
+  
+  # Main Application Content
+  div(
+    id = "mainApp",
+    class = "page",
+    # Header with title and logo
+    div(class = "app-header",
+        div(class = "header-left",
+            actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
+        ),
+        div(class = "header-right",
+            a(href = "https://massasoit.edu/", target = "_blank", 
+              img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
+            )
+        )
+    ),
     sidebarLayout(
       sidebarPanel(
         tabsetPanel(
           id = "sidebarTabs",
-            tabPanel(
+          tabPanel(
             "Data",
-            radioButtons("dataSource", "Choose data source:",
+              radioButtons("dataSource", "Choose data source:",
                    choices = c("Use base file" = "base",
                          "Upload your own file" = "upload",
                          "Online Databases" = "api"),
@@ -183,10 +241,10 @@ ui <- tagList(
               ),
               selected = ""
             ),
-            
+
             # Dynamic UI for analysis parameters
             uiOutput("analysisParams"),
-            
+
             # Action button to run the selected analysis
             actionButton("runAnalysis", "Run Analysis", class = "btn-primary")
           )
@@ -200,7 +258,7 @@ ui <- tagList(
           tabPanel("Analysis Results",
                   plotOutput("analysisPlot"),
                   verbatimTextOutput("analysisResults"))
-                   
+
         )
       )
     )
@@ -209,19 +267,65 @@ ui <- tagList(
 
 # Server logic
 server <- function(input, output, session) {
+  # Initialize app - show only landing page initially
+  shinyjs::runjs("$('#landingPage').show().addClass('page');")
+  shinyjs::runjs("$('#mainApp, #aboutPage').hide().addClass('page');")
+  
+  # Back button handler for About page
+  observeEvent(input$backToLanding, {
+    navigateToPage("landing")
+  })
+
+  # Initialize app state
+  appState <- reactiveValues(
+    currentPage = "landing" # Can be "landing", "app", or "about"
+  )
+
+  # Navigation functions
+  navigateToPage <- function(page) {
+    # Hide all pages
+    shinyjs::runjs("$('.page').hide();")
+    
+    # Show the selected page
+    if (page == "app") {
+      shinyjs::runjs("$('#mainApp').show();")
+      appState$currentPage <- "app"
+    } else if (page == "about") {
+      shinyjs::runjs("$('#aboutPage').show();")
+      appState$currentPage <- "about"
+    } else {
+      shinyjs::runjs("$('#landingPage').show();")
+      appState$currentPage <- "landing"
+    }
+  }
+
+  # Navigation observers
+  observeEvent(input$enterAppBtn, {
+    navigateToPage("app")
+  })
+  
+  observeEvent(input$aboutBtn, {
+    navigateToPage("about")
+  })
+  
+  # Handle title click to go back to landing page
+  observeEvent(input$appTitleLink, {
+    navigateToPage("landing")
+  }, ignoreInit = TRUE)
+
   # Reactive values
   analysis_results <- reactiveValues(
     result = NULL,
     plot = NULL
   )
-  
+
   # Store merged data from multiple files
   merged_data <- reactiveVal(NULL)
-  
+
   # API parameters UI
   output$apiParams <- renderUI({
     req(input$apiSource)
-    
+
     if (input$apiSource == "Traffic") {
       tagList(
         textInput("trafficLocation", "Location:", placeholder = "e.g., Boston, MA"),
@@ -243,19 +347,19 @@ server <- function(input, output, session) {
 
   # Reactive value to store the loaded data
   data <- reactiveVal(NULL)
-  
+
   # Helper function to read different file types with robust type handling
   read_data_file <- function(file_path, file_name) {
     # Function to safely convert columns to appropriate types
     clean_and_convert <- function(df) {
       # Convert all columns to character first to avoid type coercion warnings
       df[] <- lapply(df, as.character)
-      
+
       # Function to guess and convert column types
       convert_column <- function(x) {
         # Remove any non-numeric characters from potential numeric columns
         clean_x <- gsub("[^0-9.-]", "", x)
-        
+
         # Try to convert to numeric if possible
         num_x <- suppressWarnings(as.numeric(clean_x))
         if (!all(is.na(num_x)) && !all(is.na(x) | x == "")) {
