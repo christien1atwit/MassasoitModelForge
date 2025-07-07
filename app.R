@@ -11,18 +11,26 @@ library(spgwr) # For GWR
 library(readr)
 library(readxl)
 
-conda_env_name = "MassasoitModelForge_env"
+conda_env_name <- "MassasoitModelForge_env"
 
 # ------------------ App Miniconda setup ------------------- #
 
-message("Miniconda is assumed to be installed and ready at path:", reticulate::miniconda_path())
+message(
+  "Miniconda is assumed to be installed and ready at path:",
+  reticulate::miniconda_path()
+)
 
-message(paste("Attempting to create/check Conda environment with name:", conda_env_name))
+message(
+        paste(
+              "Attempting to create/check Conda environment with name:",
+              conda_env_name))
 
 # 2. Check if the Conda environment exists, create it if not.
 if (!(conda_env_name %in% reticulate::conda_list()$name)) {
   message(paste("Creating Conda environment:", conda_env_name, "..."))
-  reticulate::conda_create(envname = conda_env_name, packages = c(paste0("python=", "3.10")))
+  reticulate::conda_create(
+                           envname = conda_env_name,
+                           packages = c(paste0("python=", "3.10")))
   message(paste("Conda environment", conda_env_name, "created."))
 } else {
   message(paste("Conda environment", conda_env_name, "already exists."))
@@ -51,15 +59,19 @@ suppressWarnings({
   tryCatch({
     install_python_deps()
   }, error = function(e) {
-    message("Warning: Could not install Python dependencies: ", conditionMessage(e))
-    message("Please install them manually using: pip install -r requirements.txt")
+    message(
+            "Warning: Could not install Python dependencies: ",
+            conditionMessage(e))
+    message(
+            "Please install manually using: pip install -r requirements.txt")
   })
 })
 
 # Check if Python is available and load required Python modules
 tryCatch({
   if (!py_available(initialize = TRUE)) {
-    stop("Python is not available. Please install Python and ensure it's in your PATH.")
+    stop(
+      "Python is not available. Please install Python and ensure it's in your PATH.")
   }
 
   if (!file.exists("python_utils")) {
