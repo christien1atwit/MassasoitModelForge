@@ -96,11 +96,11 @@
   margin-bottom: 10px;
 }
 
-/* Landing Page Styles */
+/* W Landing Page Styles */
 .landing-page {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* Changed to push content to bottom */
+  justify-content: flex-end;
   min-height: 100vh;
   background-color: #333;
   background-image: url('Ian_Background_Image.jpg');
@@ -112,7 +112,8 @@
   transition: opacity 0.5s ease-in-out, visibility 0.5s;
   overflow-y: auto;
   padding: 20px;
-  padding-bottom: 25vh; /* Increased from 10vh to 25vh to move content down */
+  padding-top: 50vh; /*  top padding to push content down(this is confusing bruh) */
+  padding-bottom: 10vh; /* I honestly have no idea how this works but its where I want it now*/
   visibility: visible;
   opacity: 1;
   box-sizing: border-box;
