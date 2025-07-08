@@ -100,8 +100,7 @@
 .landing-page {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* Align content to the bottom */
-  align-items: center;
+  justify-content: flex-end; /* Changed to push content to bottom */
   min-height: 100vh;
   background-color: #333;
   background-image: url('Ian_Background_Image.jpg');
@@ -112,7 +111,8 @@
   z-index: 2000;
   transition: opacity 0.5s ease-in-out, visibility 0.5s;
   overflow-y: auto;
-  padding: 40px 20px; /* Increased bottom padding */
+  padding: 20px;
+  padding-bottom: 25vh; /* Increased from 10vh to 25vh to move content down */
   visibility: visible;
   opacity: 1;
   box-sizing: border-box;
@@ -137,9 +137,9 @@
 }
 
 .landing-content {
-  max-width: 600px;
-  width: 90%;
-  padding: 40px 30px;
+  max-width: 800px;
+  width: 95%;
+  padding: 30px 25px; /* Reduced vertical padding */
   background: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
@@ -147,15 +147,60 @@
   transform: translateY(0);
   transition: transform 0.5s ease-in-out;
   backdrop-filter: blur(5px);
-  margin-bottom: 50px; /* Space from bottom */
+  margin: 0 auto 30px auto; /* Reduced bottom margin */
+  position: relative;
+  top: 0;
+}
+
+.landing-title {
+  color: #2c3e50;
+  margin: 0 0 15px 0; /* Reduced bottom margin */
+  font-size: 2.5em;
+  font-weight: bold;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  text-align: center;
+  padding: 0 20px;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  display: inline-block;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .landing-content {
+    width: 98%;
+    padding: 30px 15px;
+  }
+  
+  .landing-title {
+    font-size: 2.2em;
+    white-space: normal;
+    word-wrap: break-word;
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-title {
+    font-size: 1.8em;
+    line-height: 1.3;
+    white-space: normal;
+    word-wrap: break-word;
+  }
 }
 
 .button-container {
   display: flex;
   justify-content: center;
   gap: 20px;
-  margin-top: 30px;
+  margin-top: 20px; /* Reduced top margin */
   flex-wrap: wrap;
+  padding: 0 10px;
 }
 
 .app-btn {
