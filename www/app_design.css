@@ -1,3 +1,6 @@
+/* Google Font Import */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap');
+
 /* App Header */
 .app-header {
   display: flex;
@@ -22,15 +25,16 @@
 
 .app-title-link {
   color: #2c3e50;
-  font-size: 1.5em;
-  font-weight: bold;
+  font-size: 1.8em; /* Slightly larger for better display with serif */
+  font-weight: 400; /* DM Serif Display looks better with normal weight */
   text-decoration: none;
   transition: color 0.3s ease;
   background: none;
   border: none;
   padding: 0;
   margin: 0;
-  font-family: inherit;
+  font-family: 'DM Serif Display', Georgia, serif; /* Apply DM Serif Display */
+  letter-spacing: 0.5px; /* Slight letter spacing for better readability */
   cursor: pointer;
 }
 
@@ -97,6 +101,16 @@
 }
 
 /* W Landing Page Styles */
+.landing-title {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400;
+  font-size: 3em;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  margin-bottom: 20px;
+  text-align: center;
+}
+
 .landing-page {
   display: flex;
   flex-direction: column;
@@ -329,42 +343,42 @@
   margin-bottom: 80px;
 }
 
-/* Headings - center-left aligned */
+/* Headings - center-left aligned with DM Serif */
 .about-container h2,
 .about-container h3,
 .about-container h4 {
+  font-family: 'DM Serif Display', Georgia, serif;
   text-align: left;
   margin-left: 0;
   padding-left: 0;
   width: 100%;
+  font-weight: 400;
+  letter-spacing: 0.5px;
 }
 
 .about-container h2 {
   color: #2c3e50;
-  margin: 30px 0 20px 0;
-  font-weight: 800;
-  font-size: 2em;
+  margin: 40px 0 25px 0;
+  font-size: 2.5em;
   border-bottom: 2px solid #3498db;
   padding-bottom: 10px;
   text-transform: none;
-  letter-spacing: normal;
 }
 
 .about-container h3 {
   color: #2c3e50;
-  margin: 30px 0 15px 0;
-  font-weight: 700;
-  font-size: 1.5em;
+  margin: 35px 0 20px 0;
+  font-size: 1.8em;
   border-left: 4px solid #3498db;
   padding-left: 15px;
+  font-style: normal;
 }
 
 .about-container h4 {
   color: #2c3e50;
-  margin: 25px 0 10px 0;
-  font-weight: 600;
+  margin: 30px 0 15px 0;
+  font-size: 1.4em;
   font-style: italic;
-  font-size: 1.2em;
 }
 
 /* Paragraph styles - all paragraphs have first line indent */
