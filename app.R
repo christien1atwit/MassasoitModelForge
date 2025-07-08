@@ -57,7 +57,7 @@ install_python_deps <- function() {
       "pytz>=2020.1"
     )
     writeLines(default_reqs, "requirements.txt")
-   }
+  }
 }
 suppressWarnings({
   tryCatch({
@@ -75,11 +75,13 @@ suppressWarnings({
 tryCatch({
   if (!py_available(initialize = TRUE)) {
     stop(
-      "Python is not available. Please install Python and ensure it's in your PATH.")
+         "Python is not available. Please install \
+          Python and ensure it's in your PATH.")
   }
 
   if (!file.exists("python_utils")) {
-    stop("python_utils directory not found. Please ensure it exists in the app directory.")
+    stop("python_utils directory not found. Please \
+    ensure it exists in the app directory.")
   }
   py_utils <- import_from_path("python_utils", path = ".")
   data_utils <- py_utils$data_utils
@@ -96,7 +98,7 @@ ui <- fluidPage(
     # Add favicon
     tags$link(rel = "icon", type = "image/png", href = "favicon.ico")
   ),
-  
+
   # Landing Page
   div(
     id = "landingPage",
@@ -105,36 +107,69 @@ ui <- fluidPage(
       class = "landing-content",
       h1("Welcome to the Massasoit Model Forge", class = "landing-title"),
       div(class = "button-container",
-          actionButton("enterAppBtn", "Enter Application", class = "app-btn"),
-          actionButton("aboutBtn", "About Us", class = "app-btn")
+        actionButton("enterAppBtn", "Enter Application", class = "app-btn"),
+        actionButton("aboutBtn", "About Us", class = "app-btn")
       )
     )
   ),
-  
+
   # About Page
   div(
     id = "aboutPage",
     class = "page",
-    style = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('Ian_Background_Image.jpg') no-repeat center center fixed; background-size: cover; overflow-y: auto;",
+    style = "display: none;
+             position: fixed;
+             top: 0;
+             left: 0;
+             width: 100%;
+             height: 100%;
+             background: url('Ian_Background_Image.jpg') 
+                 no-repeat center center fixed;
+             background-size: cover;
+             overflow-y: auto;",
     # Dark overlay
-    div(style = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1;"),
+    div(
+      style = "position: fixed;
+      top: 0; left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1;"
+    ),
     # Content wrapper
     div(style = "position: relative; z-index: 2; min-height: 100%;",
       # Header with title and logo
       div(class = "app-header",
-          div(class = "header-left",
-              actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
-          ),
-          div(class = "header-right",
-              a(href = "https://massasoit.edu/", target = "_blank", 
-                img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
-              )
+        div(class = "header-left",
+          actionLink(
+            "appTitleLink",
+            "Massasoit Model Forge",
+            class = "app-title-link"
           )
+        ),
+        div(class = "header-right",
+          a(
+            href = "https://massasoit.edu/",
+            target = "_blank",
+            img(
+              src = "STEMlogowithBackground.png",
+              class = "stem-logo",
+              alt = "Massasoit STEM"
+            )
+          )
+        )
       ),
       # Main content
       div(
         class = "about-container",
-        style = "max-width: 800px; margin: 30px auto; padding: 40px; background: rgba(255, 255, 255, 0.95); border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); position: relative; z-index: 2;",
+        style = "max-width: 800px;
+        margin: 30px auto;
+        padding: 40px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 10px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        position: relative;
+        z-index: 2;",
         # About Us Section
         h2("Who We Are"),
         p("  \t     We’re Sammy Olsen and Ian Handy, data scientists who got \
@@ -149,19 +184,23 @@ ui <- fluidPage(
         techniques accessible to researchers like us— community college \
         students, interns, field biologists, and anyone working with data \
         outside of a traditional research institution. We saw how messy and \
-        overwhelming data could be, especially when you’re just getting started. \
+        overwhelming data could be, \
+        especially when you’re just getting started. \
         Our goal was to make something that not \
-        only handles the complexity, but actually helps people ", em("understand"), " it."),
-        p("  \t    We believe in open science, transparency, and user developed \
+        only handles the complexity, but \
+        actually helps people ", em("understand"), " it."),
+        p("  \t    We believe in open science, \
+        transparency, and user developed \
         software. Massasoit Model Forge reflects that belief. Over time, \
         that idea grew into the tool you're using now. It’s built by students, \
         for students, but designed to be powerful enough for anyone."),
-        
+
         # Why We Built This Section
         h3("Why We Built This"),
         p("As community college students, we found that the tools for advanced \
         statistical analysis were either too expensive, opaque, or complex for \
-        many in education and research. We built this app to show that real science \
+        many in education and research. We \
+        built this app to show that real science \
         can happen anywhere, when you give people the tools to do it."),
 
         h3(" "),
@@ -175,29 +214,36 @@ ui <- fluidPage(
           its scientific rigor.")
         ),
         p("Massasoit Model Forge is a reflection of the values we hold dear: \
-        accessibility, reproducibility, and scientific curiosity. We built this \
+        accessibility, reproducibility, and \
+        scientific curiosity. We built this \
         for our peers, our mentors, and anyone doing research without a huge \
         lab budget or institutional access. We’re proud of where we came from, \
-        and excited about where this project can go."),        
-        
+        and excited about where this project can go."),
+
         # What It Does Section
         h3("What It Does"),
         p("Massasoit Model Forge is an open-source statistical modeling \
-        application built with R Shiny and hosted through Posit Connect. \
-        It integrates both R and Python \
-        (via the ", span("reticulate", style = "font-family: 'Courier New', monospace;"), " package) to \
-        give users access to a broad set of tools for analyzing datasets— \
-        without needing advanced programming skills or thousand dollar \
-        software."),
+          application built with R Shiny and hosted through Posit Connect. \
+          It integrates both R and Python \
+          (via the ",
+          span(
+            "reticulate",
+            style = "font-family: 'Courier New', monospace;"
+          ),
+          " package) to \
+          give users access to a broad set of tools for analyzing datasets— \
+          without needing advanced programming skills or thousand dollar \
+          software."),
         p("The app was originally built to support our lab’s ongoing \
-        research on wild bee populations, where we needed a flexible tool \
-        that could accommodate non-parametric, real-world ecological data. \
-        It has since evolved into a general purpose modeling environment \
-        that allows users to:"),
+          research on wild bee populations, where we needed a flexible tool \
+          that could accommodate non-parametric, real-world ecological data. \
+          It has since evolved into a general purpose modeling environment \
+          that allows users to:"),
         tags$ul(
           tags$li("Upload and examine structured data files. (CSV, Excel)"),
           tags$li("Run both parametric (e.g., GLMs, linear regression, ANOVA) \
-          and non-parametric (e.g., mixed models, chi-squared tests) analyses."),
+          and non-parametric (e.g., \
+          mixed models, chi-squared tests) analyses."),
           tags$li("Explore and export model diagnostics, summaries, and data \
           visualizations without writing code.")
         ),
@@ -206,9 +252,9 @@ ui <- fluidPage(
         p("We’ll continue to expand the app’s capabilities, documentation, \
         and educational use cases. If you're working with data in an \
         under-resourced setting, this tool was built with you in mind. \
-        We’re still learning. We’re still building. And we’re glad you’re here."),
-        
-        
+        We’re still learning. We’re still \
+        building. And we’re glad you’re here."),
+
         # Contact Information
         h3("Contact Information"),
         p("How to reach the team."),
@@ -219,21 +265,29 @@ ui <- fluidPage(
       )
     )
   ),
-  
+
   # Main Application Content
   div(
     id = "mainApp",
     class = "page",
     # Header with title and logo
     div(class = "app-header",
-        div(class = "header-left",
-            actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
-        ),
-        div(class = "header-right",
-            a(href = "https://massasoit.edu/", target = "_blank", 
-              img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
-            )
+      div(class = "header-left",
+        actionLink(
+          "appTitleLink",
+          "Massasoit Model Forge",
+          class = "app-title-link"
         )
+      ),
+      div(class = "header-right",
+        a(href = "https://massasoit.edu/", target = "_blank",
+          img(
+            src = "STEMlogowithBackground.png",
+            class = "stem-logo",
+            alt = "Massasoit STEM"
+          )
+        )
+      )
     ),
     sidebarLayout(
       sidebarPanel(
@@ -241,49 +295,50 @@ ui <- fluidPage(
           id = "sidebarTabs",
           tabPanel(
             "Data",
-              radioButtons("dataSource", "Choose data source:",
-                   choices = c("Use base file" = "base",
-                         "Upload your own file" = "upload",
-                         "Online Databases" = "api"),
-                   selected = "base"),
-            
+            radioButtons(
+                         "dataSource",
+                         "Choose data source:",
+                         choices = c(
+                                     "Use base file" = "base",
+                                     "Upload your own file" = "upload",
+                                     "Online Databases" = "api"),
+                         selected = "base"),
+
             # Conditional panel for base file selection
             conditionalPanel(
               condition = "input.dataSource == 'base'",
               selectInput(
-              "baseFile",
-              "Select base file:",
-              choices = list.files(
-                "Base_Data_Files",
-                pattern = "\\.(xlsx|csv)$",
-                full.names = FALSE),
-              selected = NULL)
+                          "baseFile",
+                          "Select base file:",
+                          choices = list.files(
+                                               "Base_Data_Files",
+                                               pattern = "\\.(xlsx|csv)$",
+                                               full.names = FALSE),
+                          selected = NULL)
             ),
-            
+
             # Conditional panel for file upload
             conditionalPanel(
               condition = "input.dataSource == 'upload'",
-              fileInput("file1", 
-                  label = span("Choose File(s)", 
-                         class = "file-input-label"),
-                  multiple = TRUE,
-                  accept = c(".xlsx", ".xls", ".csv"),
-                  buttonLabel = "Browse..."),
-              div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files", 
-                class = "file-input-info")
+              fileInput("file1",
+                        label = span("Choose File(s)",
+                                     class = "file-input-label"),
+                        multiple = TRUE,
+                        accept = c(".xlsx", ".xls", ".csv"),
+                        buttonLabel = "Browse..."),
+              div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files",
+                  class = "file-input-info")
             ),
-            
+
             # Conditional panel for online databases
             conditionalPanel(
               condition = "input.dataSource == 'api'",
               selectInput("apiSource", "Select Data Source:",
-                    choices = c("Traffic", "Visual Crossing")),
+                          choices = c("Traffic", "Visual Crossing")),
               # Placeholder for API-specific parameters
               uiOutput("apiParams")
             ),
-            
             actionButton("loadData", "Load Data"),
-            
             # Add JavaScript to switch to Analyze tab when Load Data is clicked
             tags$script(HTML("
               $(document).on('shiny:inputchanged', function(event) {
@@ -313,7 +368,8 @@ ui <- fluidPage(
                   "Negative Binomial Regression" = "negbin"
                 ),
                 "Non-parametric" = list(
-                  "GWR (Geographically Weighted Regression)" = "gwr", # Requires spatial data
+                  "GWR (Geographically \
+                  Weighted Regression)" = "gwr", # Requires spatial data
                   "Goodness of Fit, Chi-squared test" = "chisq",
                   "Mann-Whitney U test" = "mannwhitney",
                   "Kruskal-Wallis test" = "kruskal",
@@ -322,7 +378,8 @@ ui <- fluidPage(
                   "Sign test" = "signtest",
                   "Wilcoxon Signed-Rank test" = "wilcoxon",
                   "Spearman's Rank Correlation" = "spearman",
-                  "Permutation signed rank test" = "permtest" # Placeholder, requires a specific package
+                  "Permutation signed \
+                  rank test" = "permtest" # Placeholder!!!!
                 )
               ),
               selected = ""
@@ -342,8 +399,8 @@ ui <- fluidPage(
           tabPanel("Data", DTOutput("dataTable")),
           tabPanel("Summary", verbatimTextOutput("summary")),
           tabPanel("Analysis Results",
-                  plotOutput("analysisPlot"),
-                  verbatimTextOutput("analysisResults"))
+                   plotOutput("analysisPlot"),
+                   verbatimTextOutput("analysisResults"))
 
         )
       )
@@ -356,16 +413,16 @@ server <- function(input, output, session) {
   # Initialize app - show only landing page initially
   shinyjs::runjs("$('#landingPage').addClass('page').show();")
   shinyjs::runjs("$('#mainApp, #aboutPage').addClass('page').hide();")
-  
+
   # Navigation button handlers
   observeEvent(input$aboutBtn, {
     navigateToPage("about")
   })
-  
+
   observeEvent(input$enterAppBtn, {
     navigateToPage("app")
   })
-  
+
   observeEvent(input$appTitleLink, {
     if (appState$currentPage != "landing") {
       navigateToPage("landing")
@@ -381,7 +438,7 @@ server <- function(input, output, session) {
   navigateToPage <- function(page) {
     # Hide all pages
     shinyjs::runjs("$('.page').hide();")
-    
+
     # Show the selected page
     if (page == "app") {
       shinyjs::runjs("$('#mainApp').show();")
@@ -393,21 +450,27 @@ server <- function(input, output, session) {
       shinyjs::runjs("$('#landingPage').show();")
       appState$currentPage <- "landing"
     }
-    
+
     # Force a redraw to ensure the background image loads
-    shinyjs::runjs("setTimeout(function() { $(window).trigger('resize'); }, 50);")
+    shinyjs::runjs(
+      "setTimeout(function() { 
+        $(window).trigger('resize'); 
+      }, 50);
+      "
+    )
   }
 
   # Navigation observers
   observeEvent(input$enterAppBtn, {
     navigateToPage("app")
   })
-  
+
   observeEvent(input$aboutBtn, {
     navigateToPage("about")
   })
-  
-  # Handle title click to go back to landing page
+
+  # Handle title click to navigate back
+  # to the landing page
   observeEvent(input$appTitleLink, {
     navigateToPage("landing")
   }, ignoreInit = TRUE)
@@ -428,17 +491,17 @@ server <- function(input, output, session) {
     if (input$apiSource == "Traffic") {
       tagList(
         textInput("trafficLocation", "Location:", placeholder = "e.g., Boston, MA"),
-        dateRangeInput("trafficDates", "Date Range:", 
-                       start = Sys.Date() - 30, 
+        dateRangeInput("trafficDates", "Date Range:",
+                       start = Sys.Date() - 30,
                        end = Sys.Date())
       )
     } else if (input$apiSource == "Visual Crossing") {
       tagList(
         textInput("vcLocation", "Location:", placeholder = "e.g., Boston, MA"),
-        dateRangeInput("vcDates", "Date Range:", 
-                       start = Sys.Date() - 30, 
+        dateRangeInput("vcDates", "Date Range:",
+                       start = Sys.Date() - 30,
                        end = Sys.Date()),
-        selectInput("vcUnitGroup", "Unit System:", 
+        selectInput("vcUnitGroup", "Unit System:",
                     choices = c("Metric" = "metric", "US" = "us"))
       )
     }
@@ -464,12 +527,12 @@ server <- function(input, output, session) {
         if (!all(is.na(num_x)) && !all(is.na(x) | x == "")) {
           return(num_x)
         }
-        
+
         # Check for logical values
         if (all(tolower(x) %in% c("true", "false", "t", "f", "", NA))) {
           return(as.logical(x))
         }
-        
+
         # Check for dates (simple check)
         if (any(grepl("\\d{1,4}[-/]\\d{1,2}[-/]\\d{1,4}", x, ignore.case = TRUE))) {
           date_x <- as.Date(x, optional = TRUE)
@@ -477,11 +540,11 @@ server <- function(input, output, session) {
             return(date_x)
           }
         }
-        
+
         # Return as character if no other type fits
         return(x)
       }
-      
+
       # Apply conversion to each column
       df[] <- lapply(df, function(col) {
         # Skip if column is already in a good format
@@ -490,10 +553,10 @@ server <- function(input, output, session) {
         }
         convert_column(col)
       })
-      
+
       return(df)
     }
-    
+
     # Read the file with appropriate function
     df <- tryCatch({
       if (grepl("\\.xlsx?$", file_name, ignore.case = TRUE)) {
@@ -508,10 +571,10 @@ server <- function(input, output, session) {
       } else {
         stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
       }
-      
+
       # Clean and convert column types
       df <- clean_and_convert(df)
-      
+
       # Process with Python utilities if available
       if (exists("data_utils")) {
         py_df <- r_to_py(df)
@@ -519,18 +582,17 @@ server <- function(input, output, session) {
         py_df <- r_to_py(df)
         df <- data_utils$clean_column_names(py_df)
       }
-      
+
       df
-    }, 
+    },
     error = function(e) {
       showNotification(paste("Error reading file:", e$message), type = "error")
       return(NULL)
     })
-    
     return(df)
   }
-  
-  # Load data when button is clicked
+
+# Load data when button is clicked
   observeEvent(input$loadData, {
     tryCatch({
       if (input$dataSource == "base" && !is.null(input$baseFile)) {
@@ -541,18 +603,17 @@ server <- function(input, output, session) {
         merged_data(NULL)  # Reset merged data
         showNotification(paste("Loaded base file:", input$baseFile), 
                         type = "message")
-        
       } else if (input$dataSource == "upload" && !is.null(input$file1)) {
         # Handle multiple file uploads
         files <- input$file1
         dfs <- list()
-        
+
         # Read all files
         for (i in seq_len(nrow(files))) {
           df <- read_data_file(files$datapath[i], files$name[i])
           dfs[[files$name[i]]] <- df
         }
-        
+
         # If only one file, use it directly
         if (length(dfs) == 1) {
           data(dfs[[1]])
@@ -560,7 +621,7 @@ server <- function(input, output, session) {
           showNotification("File loaded successfully!", type = "message")
           return()
         }
-        
+
         # For multiple files, check row counts
         row_counts <- sapply(dfs, nrow)
         if (length(unique(row_counts)) > 1) {
@@ -572,7 +633,7 @@ server <- function(input, output, session) {
           ))
           return()
         }
-        
+
         # Merge data frames by columns
         merged_df <- do.call(cbind, dfs)
         data(merged_df)
@@ -582,7 +643,6 @@ server <- function(input, output, session) {
                 nrow(merged_df), "rows and", ncol(merged_df), "columns"),
           type = "message"
         )
-        
       } else if (input$dataSource == "api") {
         # Placeholder for API data loading
         showNotification("API integration will be implemented here", 
@@ -594,7 +654,7 @@ server <- function(input, output, session) {
                       type = "error")
     })
   })
-  
+
   # Data table output
   output$dataTable <- renderDT({
     df <- data()
@@ -605,11 +665,11 @@ server <- function(input, output, session) {
                            lengthMenu = c(5, 10, 15, 20)))
   })
 
-    output$summary <- renderPrint({
-      req(data())
-      df <- data()
-      cat("Data Summary\n")
-      cat("===========\n\n")
+  output$summary <- renderPrint({
+    req(data())
+    df <- data()
+    cat("Data Summary\n")
+    cat("===========\n\n")
       cat("Number of rows:", nrow(df), "\n")
       cat("Number of columns:", ncol(df), "\n\n")
       cat("Column names:\n")
@@ -693,7 +753,7 @@ server <- function(input, output, session) {
                        }'
                      )))
       },
-      
+
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectizeInput("predictorVars", "Predictor Variables:",
                      choices = num_data_cols,
@@ -706,7 +766,7 @@ server <- function(input, output, session) {
                        }')
                      ))
       },
-      
+
       if (input$analysisType %in% c("glmm", "gamm")) {
         selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
                        choices = char_data_cols,
@@ -719,7 +779,7 @@ server <- function(input, output, session) {
                        }')
                      ))
       },
-      
+
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
         selectizeInput("groupVar", "Grouping Variable:",
                      choices = char_data_cols,
@@ -731,19 +791,19 @@ server <- function(input, output, session) {
                        }'
                      )))
       },
-      
+
       if (input$analysisType == "logistic") {
         selectizeInput("logisticFamily", "Family for Logistic Regression:",
-                     choices = c("binomial", "quasibinomial"), 
+                     choices = c("binomial", "quasibinomial"),
                      selected = "binomial")
       },
-      
+
       if (input$analysisType == "glmm" || input$analysisType == "gee") {
         selectizeInput("glmmFamily", "Family for GLMM/GEE:",
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
       },
-      
+
       if (input$analysisType == "chisq") {
         tagList(
           selectizeInput("chisqVar", "Variable for Chi-squared Test:",
@@ -761,10 +821,10 @@ server <- function(input, output, session) {
           helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
         )
       },
-      
+
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
         tagList(
-          selectizeInput("var1", "Variable 1:", 
+          selectizeInput("var1", "Variable 1:",
                        choices = all_data_cols,
                        options = list(render = I(
                          '{
@@ -773,7 +833,7 @@ server <- function(input, output, session) {
                            }
                          }'
                        ))),
-          selectizeInput("var2", "Variable 2:", 
+          selectizeInput("var2", "Variable 2:",
                        choices = all_data_cols,
                        options = list(render = I(
                          '{
@@ -861,7 +921,7 @@ server <- function(input, output, session) {
         # Users might need more control here for specific smooth terms
         formula_str_parts <- lapply(input$predictorVars, function(v) paste0("s(", v, ")"))
         formula_str <- paste(input$responseVar, "~", paste(formula_str_parts, collapse = " + "))
-        
+
         # If random effects are selected, add them to the GAMM formula
         if (!is.null(input$randomEffect) && length(input$randomEffect) > 0) {
             random_formula_str <- paste(input$randomEffect, collapse = " + ")
