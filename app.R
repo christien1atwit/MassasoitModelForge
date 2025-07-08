@@ -115,22 +115,108 @@ ui <- fluidPage(
   div(
     id = "aboutPage",
     class = "page",
-    style = "display: none;",
-    # Header with title and logo
-    div(class = "app-header",
-        div(class = "header-left",
-            actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
+    style = "display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('Ian_Background_Image.jpg') no-repeat center center fixed; background-size: cover; overflow-y: auto;",
+    # Dark overlay
+    div(style = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1;"),
+    # Content wrapper
+    div(style = "position: relative; z-index: 2; min-height: 100%;",
+      # Header with title and logo
+      div(class = "app-header",
+          div(class = "header-left",
+              actionLink("appTitleLink", "Massasoit Model Forge", class = "app-title-link")
+          ),
+          div(class = "header-right",
+              a(href = "https://massasoit.edu/", target = "_blank", 
+                img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
+              )
+          )
+      ),
+      # Main content
+      div(
+        class = "about-container",
+        style = "max-width: 800px; margin: 30px auto; padding: 40px; background: rgba(255, 255, 255, 0.95); border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); position: relative; z-index: 2;",
+        # About Us Section
+        h2("Who We Are"),
+        p("  \t     We’re Sammy Olsen and Ian Handy, data scientists who got \
+        our start at Massasoit Community College. This app began as a \
+        tool for a very specific purpose: to help make sense of over a \
+        decade’s worth of wild bee research in preparation for the \
+        national Ecological Society of America conference in 2025."),
+        p("   \t    As interns in the Massasoit STEM Research Program, \
+        we worked with field data that was messy, complex, and deeply \
+        important. We wanted to build a tool that not only helped us run \
+        our own statistical models, but also made advanced data science \
+        techniques accessible to researchers like us— community college \
+        students, interns, field biologists, and anyone working with data \
+        outside of a traditional research institution. We saw how messy and \
+        overwhelming data could be, especially when you’re just getting started. \
+        Our goal was to make something that not \
+        only handles the complexity, but actually helps people ", em("understand"), " it."),
+        p("  \t    We believe in open science, transparency, and user developed \
+        software. Massasoit Model Forge reflects that belief. Over time, \
+        that idea grew into the tool you're using now. It’s built by students, \
+        for students, but designed to be powerful enough for anyone."),
+        
+        # Why We Built This Section
+        h3("Why We Built This"),
+        p("As community college students, we found that the tools for advanced \
+        statistical analysis were either too expensive, opaque, or complex for \
+        many in education and research. We built this app to show that real science \
+        can happen anywhere, when you give people the tools to do it."),
+
+        h3(" "),
+        p("Our mission is twofold:"),
+        tags$ul(
+          tags$li("To create transparent, open-source tools that bring \
+          the power of modern statistical modeling to everyone, across \
+          disciplines."),
+          tags$li("To legitimize and elevate the research of community college \
+          students, whose work is often undervalued and overlooked, despite \
+          its scientific rigor.")
         ),
-        div(class = "header-right",
-            a(href = "https://massasoit.edu/", target = "_blank", 
-              img(src = "STEMlogowithBackground.png", class = "stem-logo", alt = "Massasoit STEM")
-            )
+        p("Massasoit Model Forge is a reflection of the values we hold dear: \
+        accessibility, reproducibility, and scientific curiosity. We built this \
+        for our peers, our mentors, and anyone doing research without a huge \
+        lab budget or institutional access. We’re proud of where we came from, \
+        and excited about where this project can go."),        
+        
+        # What It Does Section
+        h3("What It Does"),
+        p("Massasoit Model Forge is an open-source statistical modeling \
+        application built with R Shiny and hosted through Posit Connect. \
+        It integrates both R and Python \
+        (via the ", span("reticulate", style = "font-family: 'Courier New', monospace;"), " package) to \
+        give users access to a broad set of tools for analyzing datasets— \
+        without needing advanced programming skills or thousand dollar \
+        software."),
+        p("The app was originally built to support our lab’s ongoing \
+        research on wild bee populations, where we needed a flexible tool \
+        that could accommodate non-parametric, real-world ecological data. \
+        It has since evolved into a general purpose modeling environment \
+        that allows users to:"),
+        tags$ul(
+          tags$li("Upload and examine structured data files. (CSV, Excel)"),
+          tags$li("Run both parametric (e.g., GLMs, linear regression, ANOVA) \
+          and non-parametric (e.g., mixed models, chi-squared tests) analyses."),
+          tags$li("Explore and export model diagnostics, summaries, and data \
+          visualizations without writing code.")
+        ),
+        h4("All through a guided interface with built in interpretability \
+        and error-checking!"),
+        p("We’ll continue to expand the app’s capabilities, documentation, \
+        and educational use cases. If you're working with data in an \
+        under-resourced setting, this tool was built with you in mind. \
+        We’re still learning. We’re still building. And we’re glad you’re here."),
+        
+        
+        # Contact Information
+        h3("Contact Information"),
+        p("How to reach the team."),
+        tags$ul(
+          tags$li("Github: spamolsen"),
+          tags$li("Github: vyndyctyv")
         )
-    ),
-    div(
-      class = "about-container",
-      h2("About Us"),
-      p("Information about Massasoit Model Forge will go here.")
+      )
     )
   ),
   
@@ -268,12 +354,22 @@ ui <- fluidPage(
 # Server logic
 server <- function(input, output, session) {
   # Initialize app - show only landing page initially
-  shinyjs::runjs("$('#landingPage').show().addClass('page');")
-  shinyjs::runjs("$('#mainApp, #aboutPage').hide().addClass('page');")
+  shinyjs::runjs("$('#landingPage').addClass('page').show();")
+  shinyjs::runjs("$('#mainApp, #aboutPage').addClass('page').hide();")
   
-  # Back button handler for About page
-  observeEvent(input$backToLanding, {
-    navigateToPage("landing")
+  # Navigation button handlers
+  observeEvent(input$aboutBtn, {
+    navigateToPage("about")
+  })
+  
+  observeEvent(input$enterAppBtn, {
+    navigateToPage("app")
+  })
+  
+  observeEvent(input$appTitleLink, {
+    if (appState$currentPage != "landing") {
+      navigateToPage("landing")
+    }
   })
 
   # Initialize app state
@@ -297,6 +393,9 @@ server <- function(input, output, session) {
       shinyjs::runjs("$('#landingPage').show();")
       appState$currentPage <- "landing"
     }
+    
+    # Force a redraw to ensure the background image loads
+    shinyjs::runjs("setTimeout(function() { $(window).trigger('resize'); }, 50);")
   }
 
   # Navigation observers

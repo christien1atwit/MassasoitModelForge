@@ -231,11 +231,79 @@
 }
 
 /* Page Layouts */
-#mainApp,
-#aboutPage {
+#mainApp {
   background-color: #f5f5f5;
   z-index: 1;
   padding-top: 0;
+}
+
+.about-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #333;
+  background-image: url('Ian_Background_Image.jpg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
+  background-size: cover;
+  z-index: 1;
+  overflow-y: auto;
+  padding-top: 70px;
+  box-sizing: border-box;
+}
+
+.about-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+  pointer-events: none;
+}
+
+#aboutPage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  background-color: #333;
+  background-image: url('Ian_Background_Image.jpg');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
+  background-size: cover;
+  z-index: 1;
+  overflow-y: auto;
+  padding-top: 70px; /* Space for header */
+  box-sizing: border-box;
+  display: none; /* Will be shown via JavaScript */
+}
+
+#aboutPage::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5); /* Dark overlay for better text readability */
+  z-index: 1;
+  pointer-events: none; /* Allow clicks to pass through to elements below */
+  width: 100%;
+  height: 100%;
+}
+
+#aboutPage > *:not(script) {
+  position: relative;
+  z-index: 2;
 }
 
 #mainApp .sidebar-layout,
@@ -245,23 +313,99 @@
 
 .about-container {
   max-width: 800px;
-  margin: 50px auto;
-  padding: 30px;
+  margin: 30px auto 80px;
+  padding: 40px;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
   text-align: center;
+  position: relative;
+  z-index: 2;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  margin-top: 30px;
+  margin-bottom: 80px;
+}
+
+/* Headings - center-left aligned */
+.about-container h2,
+.about-container h3,
+.about-container h4 {
+  text-align: left;
+  margin-left: 0;
+  padding-left: 0;
+  width: 100%;
 }
 
 .about-container h2 {
   color: #2c3e50;
-  margin-bottom: 20px;
+  margin: 30px 0 20px 0;
+  font-weight: 800;
+  font-size: 2em;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
+.about-container h3 {
+  color: #2c3e50;
+  margin: 30px 0 15px 0;
+  font-weight: 700;
+  font-size: 1.5em;
+  border-left: 4px solid #3498db;
+  padding-left: 15px;
+}
+
+.about-container h4 {
+  color: #2c3e50;
+  margin: 25px 0 10px 0;
+  font-weight: 600;
+  font-style: italic;
+  font-size: 1.2em;
+}
+
+/* Paragraph styles - all paragraphs have first line indent */
 .about-container p {
-  color: #34495e;
+  margin: 0 0 1em 0;
+  padding: 0;
   line-height: 1.6;
-  margin-bottom: 30px;
+  color: #333;
+  text-align: left;
+  text-indent: 2em;  /* Indent first line of all paragraphs */
+}
+
+/* List styles */
+.about-container ul {
+  margin: 0.5em 0 1em 1em;
+  padding-left: 2em;
+  list-style-type: disc;
+  text-align: left;  /* Ensure list text is left-aligned */
+}
+
+.about-container li {
+  margin-bottom: 0.5em;
+  padding-left: 0.5em;
+  text-indent: 0;  /* No first-line indent for list items */
+  text-align: left;  /* Ensure list item content is left-aligned */
+  list-style-position: outside;  /* Bullets hang outside the content */
+  margin-left: 0;
+  padding-left: 0;
+}
+
+/* Remove any potential centering of list items */
+.about-container li p {
+  display: inline;
+  text-indent: 0;
+}
+
+/* Nested lists */
+.about-container ul ul {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  list-style-type: circle;
+  padding-left: 1.5em;  /* Slightly less indent for nested lists */
 }
 
 .landing-page.hidden {
