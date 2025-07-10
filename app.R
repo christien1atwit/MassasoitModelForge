@@ -12,6 +12,8 @@ library(spgwr) # For GWR
 library(readr)
 library(readxl)
 
+# Rscript -e "shiny::runApp('app.R', host = '0.0.0.0', port = 8000, launch.browser = TRUE)"
+
 # Initialize shinyjs
 shinyjs::useShinyjs()
 
