@@ -12,6 +12,15 @@ library(spgwr) # For GWR
 library(readr)
 library(readxl)
 
+
+# in R studio, run the following command:
+# install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr"))
+# In R:
+# library(reticulate)
+# reticulate::install_miniconda()  # If not already installed
+# reticulate::conda_create("MassasoitModelForge_env")
+# reticulate::use_condaenv("MassasoitModelForge_env")
+
 # Rscript -e "shiny::runApp('app.R', host = '0.0.0.0', port = 8000, launch.browser = TRUE)"
 
 # Initialize shinyjs
