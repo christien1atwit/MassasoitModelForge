@@ -20,6 +20,15 @@ library(readxl)
 # reticulate::conda_create("MassasoitModelForge_env")
 # reticulate::use_condaenv("MassasoitModelForge_env")
 
+# # Activate the conda environment
+# reticulate::use_condaenv("MassasoitModelForge_env", required = TRUE)
+
+# # Install required Python packages
+# reticulate::py_install(c("pandas", "numpy", "scipy", "scikit-learn"), envname = "MassasoitModelForge_env")
+
+# # Verify the installation
+# reticulate::py_module_available("pandas")
+
 # Rscript -e "shiny::runApp('app.R', host = '0.0.0.0', port = 8000, launch.browser = TRUE)"
 
 # Initialize shinyjs
