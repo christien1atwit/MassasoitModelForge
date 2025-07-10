@@ -13,9 +13,8 @@ library(readr)
 library(readxl)
 
 
-# in R studio, run the following command:
+# in R studio, write and run a file with the following code:
 # install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr"))
-# In R:
 # library(reticulate)
 # reticulate::install_miniconda()  # If not already installed
 # reticulate::conda_create("MassasoitModelForge_env")
