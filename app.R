@@ -886,6 +886,9 @@ server <- function(input, output, session) {
 
       current_analysis_result <- list(summary = "No results yet.", plot = NULL)
 
+      ### TODO:
+      ### Make selection of analysisType not a long else-if chain
+      ### but a switch statment.
       if (input$analysisType == "linear") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
