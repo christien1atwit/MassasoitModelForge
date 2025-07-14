@@ -207,10 +207,21 @@ run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, f
   )
 }
 
-
-
-
-
+#Zero Inflated Model
+run_zeroinfl_analysis <- function(df, response_var, predictor_vars) {
+  formula_str <- paste(response_var, "~", predictor_vars)
+  model <- zeroinfl(as.formula(formula_str), data = df)
+  
+  list(
+    summary = summary(model),
+    plot = function() {
+      boxplot(as.formula(formula_str), data = df,
+              main = paste("ANOVA: ", response_var, " by ", group_var),
+              xlab = group_var, 
+              ylab = response_var)
+    }
+  )
+}
 
 #######################################################################
 
@@ -1203,6 +1214,11 @@ observeEvent(input$runAnalysis, {
         input$predictorVars,
         input$randomEffect,
         input$glmmFamily
+      ),
+      "zeroinfl" = run_zeroinfl_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars
       ),
       # Add other analysis types here
       NULL
