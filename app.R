@@ -334,7 +334,7 @@ ui <- fluidPage(
             tags$span(class = "close", "×"),
             h3("Ian Handy"),
             p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: vyndyctyv")
+            p("Github: ian-handy")
           )
         ),
         
@@ -454,7 +454,7 @@ ui <- fluidPage(
         p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
           tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
-          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
+          tags$li(tags$a(href = "https://github.com/ian-handy", target = "_blank", "GitHub: vyndyctyv"))
         )
       )
     )
