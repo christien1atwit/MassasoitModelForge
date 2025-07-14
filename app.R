@@ -889,6 +889,11 @@ server <- function(input, output, session) {
       ### TODO:
       ### Make selection of analysisType not a long else-if chain
       ### but a switch statment.
+
+
+      ### ANALYSIS CODE ###
+
+      #LINEAR
       if (input$analysisType == "linear") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -909,6 +914,9 @@ server <- function(input, output, session) {
            par(mfrow = c(1,1))
           }
         }
+      
+      
+      #LOGISTIC
       } else if (input$analysisType == "logistic") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -926,6 +934,9 @@ server <- function(input, output, session) {
             plot(1,1, type = "n", main = "No plot available for this configuration")
           }
         }
+      
+      
+      #GLMM
       } else if (input$analysisType == "glmm") {
         req(input$responseVar, input$predictorVars, input$randomEffect)
         # Construct formula with fixed and random effects
@@ -937,7 +948,11 @@ server <- function(input, output, session) {
         current_analysis_result$plot <- function() {
           plot(model, main = "GLMM Residuals vs. Fitted")
         }
-      } else if (input$analysisType == "gamm") {
+     
+     
+     
+     #GAMM
+     } else if (input$analysisType == "gamm") {
         req(input$responseVar, input$predictorVars)
         # GAM formula can be complex, for simplicity, using s() for smoothing on all predictors
         # Users might need more control here for specific smooth terms
@@ -955,6 +970,9 @@ server <- function(input, output, session) {
         current_analysis_result$plot <- function() {
           plot(model, pages = 1, main = "GAM Smooth Terms") # Plots smooth terms
         }
+      
+      
+      #ANOVA
       } else if (input$analysisType == "anova") {
         req(input$responseVar, input$groupVar)
         formula_str <- paste(input$responseVar, "~", input$groupVar)
@@ -965,6 +983,9 @@ server <- function(input, output, session) {
                   main = paste("ANOVA: ", input$responseVar, " by ", input$groupVar),
                   xlab = input$groupVar, ylab = input$responseVar)
         }
+      
+      
+      #GEE
       } else if (input$analysisType == "gee") {
         req(input$responseVar, input$predictorVars, input$randomEffect) # randomEffect for GEE's id
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -979,6 +1000,9 @@ server <- function(input, output, session) {
         } else {
           stop("For GEE, please select exactly one random effect variable to serve as the 'id' for clustering.")
         }
+      
+      
+      #NEGBIN
       } else if (input$analysisType == "negbin") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -987,6 +1011,9 @@ server <- function(input, output, session) {
         current_analysis_result$plot <- function() {
           plot(model, main = "Negative Binomial Regression Diagnostics")
         }
+      
+      
+      #CHISQ
       } else if (input$analysisType == "chisq") {
         req(input$chisqVar)
         observed_counts <- table(df[[input$chisqVar]])
@@ -1012,6 +1039,10 @@ server <- function(input, output, session) {
                     ylab = "Count", xlab = input$chisqVar, add = TRUE, density = 20)
           }
         }
+      
+      
+      
+      #MANN WHITNEY
       } else if (input$analysisType == "mannwhitney") {
         req(input$responseVar, input$groupVar)
         group_levels <- unique(df[[input$groupVar]])
@@ -1026,6 +1057,10 @@ server <- function(input, output, session) {
                   main = paste("Mann-Whitney U Test: ", input$responseVar, " by ", input$groupVar),
                   xlab = input$groupVar, ylab = input$responseVar)
         }
+      
+      
+      
+      #KRUSKAL
       } else if (input$analysisType == "kruskal") {
         req(input$responseVar, input$groupVar)
         formula_str <- paste(input$responseVar, "~", input$groupVar)
@@ -1036,6 +1071,10 @@ server <- function(input, output, session) {
                   main = paste("Kruskal-Wallis Test: ", input$responseVar, " by ", input$groupVar),
                   xlab = input$groupVar, ylab = input$responseVar)
         }
+      
+      
+      
+      #ZEROINFL
       } else if (input$analysisType == "zeroinfl") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -1047,6 +1086,10 @@ server <- function(input, output, session) {
                main = "Zero-Inflated Model: Residuals vs. Fitted")
           abline(h = 0, col = "red")
         }
+      
+      
+      
+      #HURDLE
       } else if (input$analysisType == "hurdle") {
         req(input$responseVar, input$predictorVars)
         formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
@@ -1058,6 +1101,10 @@ server <- function(input, output, session) {
                main = "Hurdle Model: Residuals vs. Fitted")
           abline(h = 0, col = "red")
         }
+      
+      
+      
+      #SIGN TEST
       } else if (input$analysisType == "signtest") {
         req(input$responseVar, input$groupVar)
         # Sign test typically for paired data or comparing median to a value.
@@ -1098,6 +1145,10 @@ server <- function(input, output, session) {
                xlab = "Differences", ylab = "Frequency", breaks = 10)
           abline(v = 0, col = "red", lty = 2)
         }
+      
+      
+      
+      #WILCOXON
       } else if (input$analysisType == "wilcoxon") {
         req(input$responseVar, input$groupVar)
         # Wilcoxon Signed-Rank Test is for paired data, similar to sign test
@@ -1112,6 +1163,10 @@ server <- function(input, output, session) {
                   main = paste("Wilcoxon Rank-Sum Test: ", input$responseVar, " by ", input$groupVar),
                   xlab = input$groupVar, ylab = input$responseVar)
         }
+      
+      
+      
+      #SPEARMAN / PEARSON
       } else if (input$analysisType == "spearman" || input$analysisType == "pearson") {
         req(input$var1, input$var2)
         method <- ifelse(input$analysisType == "spearman", "spearman", "pearson")
@@ -1123,16 +1178,28 @@ server <- function(input, output, session) {
                main = paste(tools::toTitleCase(method), "Correlation Plot"))
           abline(lm(df[[input$var2]] ~ df[[input$var1]]), col = "blue") # Add regression line
         }
+      
+      
+      
+      #PERMTEST
       } else if (input$analysisType == "permtest") {
           current_analysis_result$summary <- "Permutation signed rank test is complex and requires specific packages/implementations. This is a placeholder."
           current_analysis_result$plot <- function() {
             plot(1,1, type = "n", main = "No plot for permutation test placeholder.")
           }
+      
+      
+      
+      #GWR
       } else if (input$analysisType == "gwr") {
           current_analysis_result$summary <- "Geographically Weighted Regression (GWR) requires spatial data (sf or sp objects) and specific packages (e.g., spgwr). Data needs to be in a spatial format first."
           current_analysis_result$plot <- function() {
             plot(1,1, type = "n", main = "GWR requires spatial data visualization.")
           }
+      
+      
+      
+      #FALLBACK CASE
       } else {
         current_analysis_result$summary <- "Analysis type not yet implemented or selected."
         current_analysis_result$plot <- NULL
