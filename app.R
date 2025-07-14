@@ -3,11 +3,11 @@ library(shinyjs) # For JavaScript operations in Shiny
 library(reticulate)
 library(DT)
 library(readxl) # For reading Excel files
-library(lme4)   # For GLMMs
-library(mgcv)   # For GAMs/GAMMs
+library(lme4)   # For GLMMs (used by glmer and internally by gamm)
+library(mgcv)   # For GAMs/GAMMs (gamm, gam)
 library(MASS)   # For Negative Binomial Regression (glm.nb)
 library(pscl)   # For Zero-Inflated and Hurdle models
-library(geepack) # For GEE
+library(geepack) # For GEE (geeglm)
 library(spgwr) # For GWR
 library(readr)
 library(readxl)
@@ -108,12 +108,126 @@ tryCatch({
   stop("Error initializing Python: ", conditionMessage(e))
 })
 
+
+
+
+##########################################################################
+
+######################     Analysis Functions           ###################
+
+##########################################################################
+
+
+
+
+# Linear Regression Analysis
+run_linear_analysis <- function(df, response_var, predictor_vars) {
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  model <- lm(as.formula(formula_str), data = df)
+  
+  list(
+    summary = summary(model),
+    plot = function() {
+      if (length(predictor_vars) == 1) {
+        plot(df[[predictor_vars[1]]], df[[response_var]],
+             xlab = predictor_vars[1], 
+             ylab = response_var,
+             main = paste("Linear Regression:", response_var, "vs", predictor_vars[1]))
+        abline(model, col = "blue", lwd = 2)
+      } else {
+        par(mfrow = c(2, 2))
+        plot(model)
+        par(mfrow = c(1, 1))
+      }
+    }
+  )
+}
+
+
+
+# Logistic Regression Analysis
+run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  model <- glm(as.formula(formula_str), family = family, data = df)
+  
+  list(
+    summary = summary(model),
+    plot = function() {
+      if (length(predictor_vars) > 0) {
+        predictor_to_plot <- predictor_vars[1]
+        plot(df[[predictor_to_plot]], predict(model, type = "response"),
+             xlab = predictor_to_plot, 
+             ylab = "Predicted Probability",
+             main = "Logistic Regression: Predicted Probabilities")
+        points(df[[predictor_to_plot]], df[[response_var]], 
+               col = "red", pch = 16)
+      } else {
+        plot(1, 1, type = "n", 
+             main = "No plot available for this configuration")
+      }
+    }
+  )
+}
+
+
+
+# ANOVA Analysis
+run_anova_analysis <- function(df, response_var, group_var) {
+  formula_str <- paste(response_var, "~", group_var)
+  model <- aov(as.formula(formula_str), data = df)
+  
+  list(
+    summary = summary(model),
+    plot = function() {
+      boxplot(as.formula(formula_str), data = df,
+              main = paste("ANOVA: ", response_var, " by ", group_var),
+              xlab = group_var, 
+              ylab = response_var)
+    }
+  )
+}
+
+
+
+# GLMM Analysis
+run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
+  formula_str <- paste0(response_var, " ~ ", 
+                       paste(predictor_vars, collapse = " + "), 
+                       " + (1|", random_effect, ")")
+  
+  model <- lme4::glmer(as.formula(formula_str), 
+                      family = family, 
+                      data = df)
+  
+  list(
+    summary = summary(model),
+    plot = function() {
+      plot(model, main = "GLMM Residuals vs. Fitted")
+    }
+  )
+}
+
+
+
+
+
+
+#######################################################################
+
+
+
 # UI definition with custom CSS
 ui <- fluidPage(
   useShinyjs(),
   tags$head(
-    # Include the external CSS file
-    tags$link(rel = "stylesheet", type = "text/css", href = "app_design.css"),
+    # Prevent caching of CSS
+    HTML('<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+         <meta http-equiv="Pragma" content="no-cache" />
+         <meta http-equiv="Expires" content="0" />
+         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>'),
+    # Include the external CSS file with version parameter
+    tags$link(rel = "stylesheet", type = "text/css", 
+             href = paste0("app_design.css?", as.integer(Sys.time()))),
     # Add favicon
     tags$link(rel = "icon", type = "image/png", href = "favicon.ico")
   ),
@@ -145,7 +259,9 @@ ui <- fluidPage(
              background: url('Ian_Background_Image.jpg') 
                  no-repeat center center fixed;
              background-size: cover;
-             overflow-y: auto;",
+             overflow-y: auto;
+             padding: 0;
+             margin: 0;",
     # Dark overlay
     div(
       style = "position: fixed;
@@ -156,9 +272,11 @@ ui <- fluidPage(
       z-index: 1;"
     ),
     # Content wrapper
-    div(style = "position: relative; z-index: 2; min-height: 100%;",
+    div(style = "position: relative; z-index: 2; min-height: 100%; padding-top: 80px;",
       # Header with title and logo
       div(class = "app-header",
+        style = "position: fixed; top: 0; left: 0; right: 0; z-index: 1000;"
+      ,
         div(class = "header-left",
           actionLink(
             "appTitleLink",
@@ -168,7 +286,7 @@ ui <- fluidPage(
         ),
         div(class = "header-right",
           a(
-            href = "https://massasoit.edu/",
+            href = "https://massasoitstem.com/",
             target = "_blank",
             img(
               src = "STEMlogowithBackground.png",
@@ -191,11 +309,68 @@ ui <- fluidPage(
         z-index: 2;",
         # About Us Section
         h2("Who We Are"),
-        p("  \t     We’re Sammy Olsen and Ian Handy, data scientists who got \
+        p("  \t     We're ",
+          actionLink("sammyLink", "Sammy Olsen", style = "color: #3498db; cursor: pointer; text-decoration: underline;"),
+          " and ",
+          actionLink("ianLink", "Ian Handy", style = "color: #3498db; cursor: pointer; text-decoration: underline;"),
+          ", data scientists who got \
         our start at Massasoit Community College. This app began as a \
         tool for a very specific purpose: to help make sense of over a \
-        decade’s worth of wild bee research in preparation for the \
+        decade's worth of wild bee research in preparation for the \
         national Ecological Society of America conference in 2025."),
+        
+        # Popup Modals
+        tags$div(id = "sammyModal", class = "modal",
+          tags$div(class = "modal-content",
+            tags$span(class = "close", "×"),
+            h3("Sammy Olsen"),
+            p("Data Scientist and co-creator of Massasoit Model Forge."),
+            p("Github: spamolsen")
+          )
+        ),
+        
+        tags$div(id = "ianModal", class = "modal",
+          tags$div(class = "modal-content",
+            tags$span(class = "close", "×"),
+            h3("Ian Handy"),
+            p("Data Scientist and co-creator of Massasoit Model Forge."),
+            p("Github: vyndyctyv")
+          )
+        ),
+        
+        # JavaScript for modals
+        tags$script(HTML(
+          "// Get the modals
+          var sammyModal = document.getElementById('sammyModal');
+          var ianModal = document.getElementById('ianModal');
+          
+          // Get the links that open the modals
+          var sammyLink = document.getElementById('sammyLink');
+          var ianLink = document.getElementById('ianLink');
+          
+          // Get the <span> elements that close the modals
+          var spans = document.getElementsByClassName('close');
+          
+          // When the user clicks on a link, open the corresponding modal
+          sammyLink.onclick = function() { sammyModal.style.display = 'block'; }
+          ianLink.onclick = function() { ianModal.style.display = 'block'; }
+          
+          // When the user clicks on <span> (x), close the modal
+          for (var i = 0; i < spans.length; i++) {
+            spans[i].onclick = function() {
+              sammyModal.style.display = 'none';
+              ianModal.style.display = 'none';
+            }
+          }
+          
+          // When the user clicks anywhere outside of the modal, close it
+          window.onclick = function(event) {
+            if (event.target == sammyModal || event.target == ianModal) {
+              sammyModal.style.display = 'none';
+              ianModal.style.display = 'none';
+            }
+          }
+          ")),
         p("   \t    As interns in the Massasoit STEM Research Program, \
         we worked with field data that was messy, complex, and deeply \
         important. We wanted to build a tool that not only helped us run \
@@ -276,10 +451,10 @@ ui <- fluidPage(
 
         # Contact Information
         h3("Contact Information"),
-        p("How to reach the team."),
+        p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
-          tags$li("Github: spamolsen"),
-          tags$li("Github: vyndyctyv")
+          tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
+          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
         )
       )
     )
@@ -289,138 +464,222 @@ ui <- fluidPage(
   div(
     id = "mainApp",
     class = "page",
-    # Header with title and logo
-    div(class = "app-header",
-      div(class = "header-left",
-        actionLink(
-          "appTitleLink",
-          "Massasoit Model Forge",
-          class = "app-title-link"
-        )
-      ),
-      div(class = "header-right",
-        a(href = "https://massasoit.edu/", target = "_blank",
-          img(
-            src = "STEMlogowithBackground.png",
-            class = "stem-logo",
-            alt = "Massasoit STEM"
+    style = "display: none;
+             position: fixed;
+             top: 0;
+             left: 0;
+             width: 100%;
+             height: 100%;
+             background: url('Ian_Background_Image.jpg') 
+                 no-repeat center center fixed;
+             background-size: cover;
+             overflow-y: auto;",
+    # Dark overlay
+    div(
+      style = "position: fixed;
+      top: 0; left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1;"
+    ),
+    # Content wrapper
+    div(style = "position: relative; z-index: 2; min-height: 100%;",
+      # Header with title and logo
+      div(class = "app-header",
+        div(class = "header-left",
+          actionLink(
+            "appTitleLink",
+            "Massasoit Model Forge",
+            class = "app-title-link"
+          )
+        ),
+        div(class = "header-right",
+          a(href = "https://massasoitstem.com/", target = "_blank",
+            img(
+              src = "STEMlogowithBackground.png",
+              class = "stem-logo",
+              alt = "Massasoit STEM"
+            )
           )
         )
-      )
-    ),
-    sidebarLayout(
-      sidebarPanel(
-        tabsetPanel(
-          id = "sidebarTabs",
-          tabPanel(
-            "Data",
-            radioButtons(
-                         "dataSource",
-                         "Choose data source:",
-                         choices = c(
-                                     "Use base file" = "base",
-                                     "Upload your own file" = "upload",
-                                     "Online Databases" = "api"),
-                         selected = "base"),
+      ),
 
-            # Conditional panel for base file selection
-            conditionalPanel(
-              condition = "input.dataSource == 'base'",
-              selectInput(
-                          "baseFile",
-                          "Select base file:",
-                          choices = list.files(
-                                               "Base_Data_Files",
-                                               pattern = "\\.(xlsx|csv)$",
-                                               full.names = FALSE),
-                          selected = NULL)
-            ),
+      
+      # Main content row with sidebar and results
+      # Transparent spacer div for layout
+      div(style = "height: 40px; margin: 20px 0;"),
+      
+      div(class = "container-fluid",
+        div(class = "row",
+          # Sidebar with data/analysis controls (left side)
+          div(class = "col-md-4",
+            div(class = "sidebar-panel", style = "background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);",
+              tabsetPanel(
+                id = "sidebarTabs",
+                tabPanel(
+                  "Data",
+                  div(class = "form-group",
+                    radioButtons(
+                      "dataSource",
+                      "Choose data source:",
+                      choices = c(
+                        "Use base file" = "base",
+                        "Upload your own file" = "upload",
+                        "Online Databases" = "api"
+                      ),
+                      selected = "base"
+                    )
+                  ),
 
-            # Conditional panel for file upload
-            conditionalPanel(
-              condition = "input.dataSource == 'upload'",
-              fileInput("file1",
-                        label = span("Choose File(s)",
-                                     class = "file-input-label"),
+                  # Conditional panel for base file selection
+                  conditionalPanel(
+                    condition = "input.dataSource == 'base'",
+                    div(class = "form-group",
+                      selectInput(
+                        "baseFile",
+                        "Select base file:",
+                        choices = list.files(
+                          "Base_Data_Files",
+                          pattern = "\\.(xlsx|csv)$",
+                          full.names = FALSE
+                        ),
+                        selected = NULL
+                      )
+                    )
+                  ),
+
+                  # Conditional panel for file upload
+                  conditionalPanel(
+                    condition = "input.dataSource == 'upload'",
+                    div(class = "form-group",
+                      fileInput(
+                        "file1",
+                        label = span("Choose File(s)", class = "file-input-label"),
                         multiple = TRUE,
                         accept = c(".xlsx", ".xls", ".csv"),
-                        buttonLabel = "Browse..."),
-              div("Select one or more Excel (.xlsx, .xls) or CSV (.csv) files",
-                  class = "file-input-info")
-            ),
+                        buttonLabel = "Browse..."
+                      ),
+                      div(
+                        "Select one or more Excel (.xlsx, .xls) or CSV (.csv) files",
+                        class = "file-input-info"
+                      )
+                    )
+                  ),
 
-            # Conditional panel for online databases
-            conditionalPanel(
-              condition = "input.dataSource == 'api'",
-              selectInput("apiSource", "Select Data Source:",
-                          choices = c("Traffic", "Visual Crossing")),
-              # Placeholder for API-specific parameters
-              uiOutput("apiParams")
-            ),
-            actionButton("loadData", "Load Data"),
-            # Add JavaScript to switch to Analyze tab when Load Data is clicked
-            tags$script(HTML("
-              $(document).on('shiny:inputchanged', function(event) {
-              if (event.name === 'loadData' && event.value > 0) {
-                setTimeout(function() {
-                $('a[data-value=\"Analyze\"]').tab('show');
-                }, 300);
-              }
-              });
-            "))
-          ),
-          tabPanel(
-            "Analyze",
-            # Analysis type selection
-            selectInput(
-              "analysisType",
-              "Select Analysis Type:",
-              choices = list(
-                "-- Select Analysis Type --" = "",
-                "Parametric/Semi-parametric" = list(
-                  "GAM(M)s" = "gamm",
-                  "GLM(M)s" = "glmm",
-                  "Logistic Regression" = "logistic",
-                  "ANOVA" = "anova",
-                  "Linear Regression" = "linear",
-                  "Generalized Estimating Equations" = "gee",
-                  "Negative Binomial Regression" = "negbin"
+                  # Conditional panel for online databases
+                  conditionalPanel(
+                    condition = "input.dataSource == 'api'",
+                    div(class = "form-group",
+                      selectInput(
+                        "apiSource", 
+                        "Select Data Source:",
+                        choices = c("Traffic", "Visual Crossing")
+                      ),
+                      # Placeholder for API-specific parameters
+                      uiOutput("apiParams")
+                    )
+                  ),
+                  
+                  actionButton("loadData", "Load Data", class = "btn-primary"),
+                  
+                  # Add JavaScript to switch to Analyze tab when Load Data is clicked
+                  tags$script(HTML("
+                    $(document).on('shiny:inputchanged', function(event) {
+                      if (event.name === 'loadData' && event.value > 0) {
+                        setTimeout(function() {
+                          $('a[data-value=\"Analyze\"]').tab('show');
+                        }, 300);
+                      }
+                    });
+                  ")),
+                  style = "margin-top: 10px;"
                 ),
-                "Non-parametric" = list(
-                  "GWR (Geographically \
-                  Weighted Regression)" = "gwr", # Requires spatial data
-                  "Goodness of Fit, Chi-squared test" = "chisq",
-                  "Mann-Whitney U test" = "mannwhitney",
-                  "Kruskal-Wallis test" = "kruskal",
-                  "Zero Inflated Model" = "zeroinfl",
-                  "Hurdle Model" = "hurdle",
-                  "Sign test" = "signtest",
-                  "Wilcoxon Signed-Rank test" = "wilcoxon",
-                  "Spearman's Rank Correlation" = "spearman",
-                  "Permutation signed \
-                  rank test" = "permtest" # Placeholder!!!!
+                
+                tabPanel(
+                  "Analyze",
+                  div(class = "form-group",
+                    selectInput(
+                      "analysisType",
+                      "Select Analysis Type:",
+                      choices = list(
+                        "-- Select Analysis Type --" = "",
+                        "Parametric/Semi-parametric" = list(
+                          "GAM(M)s" = "gamm",
+                          "GLM(M)s" = "glmm",
+                          "Logistic Regression" = "logistic",
+                          "ANOVA" = "anova",
+                          "Linear Regression" = "linear",
+                          "Generalized Estimating Equations" = "gee",
+                          "Negative Binomial Regression" = "negbin"
+                        ),
+                        "Non-parametric" = list(
+                          "GWR (Geographically Weighted Regression)" = "gwr",
+                          "Goodness of Fit, Chi-squared test" = "chisq",
+                          "Mann-Whitney U test" = "mannwhitney",
+                          "Kruskal-Wallis test" = "kruskal",
+                          "Zero Inflated Model" = "zeroinfl",
+                          "Hurdle Model" = "hurdle",
+                          "Sign test" = "signtest",
+                          "Wilcoxon Signed-Rank test" = "wilcoxon",
+                          "Spearman's Rank Correlation" = "spearman",
+                          "Permutation signed rank test" = "permtest"
+                        )
+                      ),
+                      selected = ""
+                    )
+                  ),
+
+                  # Dynamic UI for analysis parameters
+                  uiOutput("analysisParams"),
+
+                  # Action button to run the selected analysis
+                  actionButton("runAnalysis", "Run Analysis", class = "btn-primary")
                 )
-              ),
-              selected = ""
-            ),
-
-            # Dynamic UI for analysis parameters
-            uiOutput("analysisParams"),
-
-            # Action button to run the selected analysis
-            actionButton("runAnalysis", "Run Analysis", class = "btn-primary")
+              )
+            )
+          ),
+          
+          # Main content area with results tabs (right side)
+          div(class = "col-md-8",
+            div(class = "main-panel", style = "background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);",
+              tabsetPanel(
+                id = "mainTabs",
+                tabPanel(
+                  "Data", 
+                  div(class = "table-responsive",
+                    DTOutput("dataTable")
+                  )
+                ),
+                
+                tabPanel("Summary", 
+                  div(class = "summary-output",
+                    verbatimTextOutput("summary")
+                  )
+                ),
+                
+                tabPanel("Analysis Results",
+                  conditionalPanel(
+                    condition = "output.analysisPlot_available == true",
+                    div(class = "plot-container",
+                      plotOutput("analysisPlot", height = "500px")
+                    )
+                  ),
+                  
+                  conditionalPanel(
+                    condition = "output.analysisPlot_available == false",
+                    div(class = "alert alert-info",
+                      "No plot available for this analysis type or an error occurred."
+                    )
+                  ),
+                  
+                  div(class = "results-output",
+                    verbatimTextOutput("analysisResults")
+                  )
+                )
+              )
+            )
           )
-        )
-      ),
-      mainPanel(
-        tabsetPanel(
-          id = "mainTabs",
-          tabPanel("Data", DTOutput("dataTable")),
-          tabPanel("Summary", verbatimTextOutput("summary")),
-          tabPanel("Analysis Results",
-                   plotOutput("analysisPlot"),
-                   verbatimTextOutput("analysisResults"))
-
         )
       )
     )
@@ -715,14 +974,18 @@ server <- function(input, output, session) {
       print(utils::head(df, 5))
 })
 
-  output$analysisParams <- renderUI({
-    req(input$analysisType)
-    req(data()) 
-
-    if (input$analysisType == "") return(NULL)
-
-    # Get data and calculate non-NA counts
+  # Reactive expression to generate formatted choices for selectizeInputs
+  # This ensures choices are computed once when data changes, and then used by renderUI
+  formatted_choices <- reactive({
     df <- data()
+    if (is.null(df)) {
+      return(list(
+        all_data_cols_formatted = character(0),
+        num_data_cols_formatted = character(0),
+        char_data_cols_formatted = character(0)
+      ))
+    }
+
     non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
     total_rows <- nrow(df)
     
@@ -747,6 +1010,16 @@ server <- function(input, output, session) {
       )
     }) %>% paste(collapse = "\n")
 
+
+
+##########################################################################
+
+######################     Code for analysis           ###################
+
+##########################################################################
+
+
+
     # Format variable names (without N values in the text, they'll be added via CSS)
     format_vars <- function(vars) {
       setNames(vars, vars)
@@ -758,12 +1031,11 @@ server <- function(input, output, session) {
 
     # Include the CSS in the UI
     tagList(
-      tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
         selectizeInput("responseVar", "Response Variable:",
-                     choices = num_data_cols,
+                     choices = num_data_cols, # Use formatted choices directly
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -775,7 +1047,7 @@ server <- function(input, output, session) {
 
       if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols,
+                     choices = num_data_cols, # Use formatted choices directly
                      multiple = TRUE,
                      options = list(
                        render = I('{
@@ -790,10 +1062,38 @@ server <- function(input, output, session) {
         selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
                        choices = char_data_cols,
                        multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects",
+                       options = list(placeholder = "Select grouping variable(s) for random intercepts",
                        render = I('{
                          item: function(item, escape) { 
-                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+
+      # GAMM specific random effect input
+      if (input$analysisType == "gamm") {
+        selectizeInput("gammRandomEffectVars", "GAMM Random Effect Grouping Variables (Intercepts only):",
+                       choices = char_data_cols, # Use formatted choices directly
+                       multiple = TRUE,
+                       options = list(placeholder = "Select grouping variable(s) for random intercepts",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+      
+      # GEE specific ID variable input
+      if (input$analysisType == "gee") {
+        selectizeInput("geeIdVar", "GEE Cluster ID Variable (Select one):",
+                       choices = char_data_cols, # Use formatted choices directly
+                       multiple = FALSE, # Only one ID variable allowed for GEE
+                       options = list(placeholder = "Select one ID variable",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
                          }
                        }')
                      ))
@@ -801,7 +1101,7 @@ server <- function(input, output, session) {
 
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
         selectizeInput("groupVar", "Grouping Variable:",
-                     choices = char_data_cols,
+                     choices = char_data_cols, # Use formatted choices directly
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -818,7 +1118,7 @@ server <- function(input, output, session) {
       },
 
       if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+        selectInput("glmmFamily", "Family for GLMM/GEE:", # Changed to selectInput as it's simpler and doesn't needs dynamic search
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
       },
@@ -826,7 +1126,7 @@ server <- function(input, output, session) {
       if (input$analysisType == "chisq") {
         tagList(
           selectizeInput("chisqVar", "Variable for Chi-squared Test:",
-                        choices = all_data_cols,
+                        choices = all_data_cols, # Use formatted choices directly
                         options = list(render = I(
                           '{
                             item: function(item, escape) { 
@@ -872,365 +1172,87 @@ server <- function(input, output, session) {
 
 
   # Run analysis when the run button is clicked
-  observeEvent(input$runAnalysis, {
-    req(data(), input$analysisType)
-
-    # Reset results and plot on new analysis run
-    analysis_results$result <- NULL
-    analysis_results$plot <- NULL
-
-    df <- data()
-
-    tryCatch({
-      showNotification(paste("Running", input$analysisType, "analysis..."), type = "message")
-
-      current_analysis_result <- list(summary = "No results yet.", plot = NULL)
-
-      ### TODO:
-      ### Make selection of analysisType not a long else-if chain
-      ### but a switch statment.
-
-
-      ### ANALYSIS CODE ###
-
-      #LINEAR
-      if (input$analysisType == "linear") {
-        req(input$responseVar, input$predictorVars)
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        model <- lm(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          # If only one predictor, plot regression line
-          if (length(input$predictorVars) == 1) {
-            predictor <- input$predictorVars[1]
-            plot(df[[predictor]], df[[input$responseVar]],
-                 xlab = predictor, ylab = input$responseVar,
-                 main = paste("Linear Regression:", input$responseVar, "vs", predictor))
-            abline(model, col = "blue", lwd = 2)
-          } else {
-           # For multiple predictors, show diagnostic plots
-           par(mfrow = c(2,2))
-           plot(model)
-           par(mfrow = c(1,1))
-          }
-        }
-      
-      
-      #LOGISTIC
-      } else if (input$analysisType == "logistic") {
-        req(input$responseVar, input$predictorVars)
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        model <- glm(as.formula(formula_str), family = input$logisticFamily, data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          # Example: Plotting predicted probabilities vs. a predictor
-          if (length(input$predictorVars) > 0) {
-            predictor_to_plot <- input$predictorVars[1]
-            plot(df[[predictor_to_plot]], predict(model, type = "response"),
-                 xlab = predictor_to_plot, ylab = "Predicted Probability",
-                 main = "Logistic Regression: Predicted Probabilities")
-            points(df[[predictor_to_plot]], df[[input$responseVar]], col = "red", pch = 16) # Actual values
-          } else {
-            plot(1,1, type = "n", main = "No plot available for this configuration")
-          }
-        }
-      
-      
-      #GLMM
-      } else if (input$analysisType == "glmm") {
-        req(input$responseVar, input$predictorVars, input$randomEffect)
-        # Construct formula with fixed and random effects
-        fixed_formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        random_formula_str <- paste(fixed_formula_str, "+", paste(input$randomEffect, collapse = " + "))
-
-        model <- glmer(as.formula(random_formula_str), family = input$glmmFamily, data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(model, main = "GLMM Residuals vs. Fitted")
-        }
-     
-     
-     
-     #GAMM
-     } else if (input$analysisType == "gamm") {
-        req(input$responseVar, input$predictorVars)
-        # GAM formula can be complex, for simplicity, using s() for smoothing on all predictors
-        # Users might need more control here for specific smooth terms
-        formula_str_parts <- lapply(input$predictorVars, function(v) paste0("s(", v, ")"))
-        formula_str <- paste(input$responseVar, "~", paste(formula_str_parts, collapse = " + "))
-
-        # If random effects are selected, add them to the GAMM formula
-        if (!is.null(input$randomEffect) && length(input$randomEffect) > 0) {
-            random_formula_str <- paste(input$randomEffect, collapse = " + ")
-            formula_str <- paste(formula_str, "+", random_formula_str)
-        }
-
-        model <- gam(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(model, pages = 1, main = "GAM Smooth Terms") # Plots smooth terms
-        }
-      
-      
-      #ANOVA
-      } else if (input$analysisType == "anova") {
-        req(input$responseVar, input$groupVar)
-        formula_str <- paste(input$responseVar, "~", input$groupVar)
-        model <- aov(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          boxplot(as.formula(formula_str), data = df,
-                  main = paste("ANOVA: ", input$responseVar, " by ", input$groupVar),
-                  xlab = input$groupVar, ylab = input$responseVar)
-        }
-      
-      
-      #GEE
-      } else if (input$analysisType == "gee") {
-        req(input$responseVar, input$predictorVars, input$randomEffect) # randomEffect for GEE's id
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        # GEE requires an 'id' variable for clustering
-        if (length(input$randomEffect) == 1) {
-          model <- geeglm(as.formula(formula_str), id = df[[input$randomEffect]],
-                          family = input$glmmFamily, data = df)
-          current_analysis_result$summary <- summary(model)
-          current_analysis_result$plot <- function() {
-            plot(1,1, type = "n", main = "GEE plots often involve residuals or predictions, needs custom implementation.")
-          }
-        } else {
-          stop("For GEE, please select exactly one random effect variable to serve as the 'id' for clustering.")
-        }
-      
-      
-      #NEGBIN
-      } else if (input$analysisType == "negbin") {
-        req(input$responseVar, input$predictorVars)
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        model <- glm.nb(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(model, main = "Negative Binomial Regression Diagnostics")
-        }
-      
-      
-      #CHISQ
-      } else if (input$analysisType == "chisq") {
-        req(input$chisqVar)
-        observed_counts <- table(df[[input$chisqVar]])
-        expected_probs <- NULL
-        if (!is.null(input$expectedProbs) && input$expectedProbs != "") {
-          expected_probs <- as.numeric(unlist(strsplit(input$expectedProbs, ",")))
-          if (sum(expected_probs) != 1 && !is.na(sum(expected_probs))) {
-            showNotification("Warning: Expected probabilities do not sum to 1. Will be normalized.", type = "warning")
-            expected_probs <- expected_probs / sum(expected_probs)
-          }
-          if (length(expected_probs) != length(observed_counts)) {
-            stop("Number of expected probabilities must match the number of levels in the observed variable.")
-          }
-        }
-        test_result <- chisq.test(observed_counts, p = expected_probs)
-        current_analysis_result$summary <- test_result
-        current_analysis_result$plot <- function() {
-          barplot(observed_counts, main = "Observed Counts for Chi-squared Test",
-                  ylab = "Count", xlab = input$chisqVar)
-          if (!is.null(expected_probs)) {
-            expected_counts <- sum(observed_counts) * expected_probs
-            barplot(expected_counts, main = "Expected Counts for Chi-squared Test",
-                    ylab = "Count", xlab = input$chisqVar, add = TRUE, density = 20)
-          }
-        }
-      
-      
-      
-      #MANN WHITNEY
-      } else if (input$analysisType == "mannwhitney") {
-        req(input$responseVar, input$groupVar)
-        group_levels <- unique(df[[input$groupVar]])
-        if (length(group_levels) != 2) {
-          stop("Mann-Whitney U test requires exactly two groups.")
-        }
-        formula_str <- paste(input$responseVar, "~", input$groupVar)
-        test_result <- wilcox.test(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- test_result
-        current_analysis_result$plot <- function() {
-          boxplot(as.formula(formula_str), data = df,
-                  main = paste("Mann-Whitney U Test: ", input$responseVar, " by ", input$groupVar),
-                  xlab = input$groupVar, ylab = input$responseVar)
-        }
-      
-      
-      
-      #KRUSKAL
-      } else if (input$analysisType == "kruskal") {
-        req(input$responseVar, input$groupVar)
-        formula_str <- paste(input$responseVar, "~", input$groupVar)
-        test_result <- kruskal.test(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- test_result
-        current_analysis_result$plot <- function() {
-          boxplot(as.formula(formula_str), data = df,
-                  main = paste("Kruskal-Wallis Test: ", input$responseVar, " by ", input$groupVar),
-                  xlab = input$groupVar, ylab = input$responseVar)
-        }
-      
-      
-      
-      #ZEROINFL
-      } else if (input$analysisType == "zeroinfl") {
-        req(input$responseVar, input$predictorVars)
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        model <- zeroinfl(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(fitted(model), residuals(model),
-               xlab = "Fitted Values", ylab = "Residuals",
-               main = "Zero-Inflated Model: Residuals vs. Fitted")
-          abline(h = 0, col = "red")
-        }
-      
-      
-      
-      #HURDLE
-      } else if (input$analysisType == "hurdle") {
-        req(input$responseVar, input$predictorVars)
-        formula_str <- paste(input$responseVar, "~", paste(input$predictorVars, collapse = " + "))
-        model <- hurdle(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- summary(model)
-        current_analysis_result$plot <- function() {
-          plot(fitted(model), residuals(model),
-               xlab = "Fitted Values", ylab = "Residuals",
-               main = "Hurdle Model: Residuals vs. Fitted")
-          abline(h = 0, col = "red")
-        }
-      
-      
-      
-      #SIGN TEST
-      } else if (input$analysisType == "signtest") {
-        req(input$responseVar, input$groupVar)
-        # Sign test typically for paired data or comparing median to a value.
-        # For simplicity, assuming a paired-like comparison for now.
-        # You'll need to define how 'paired' data is structured for this.
-        # Example: comparing two groups, assumes equal sample size for simplicity.
-        # A more robust implementation would check for paired samples.
-        group_levels <- unique(df[[input$groupVar]])
-        if (length(group_levels) != 2) {
-          stop("Sign test requires exactly two groups for comparison.")
-        }
-        # Get data for each group
-        group1_data <- df[[input$responseVar]][df[[input$groupVar]] == group_levels[1]]
-        group2_data <- df[[input$responseVar]][df[[input$groupVar]] == group_levels[2]]
-
-        # Ensure same length for paired test, or define how to handle unpaired.
-        if (length(group1_data) != length(group2_data)) {
-          stop("For a basic sign test, the two groups must have the same number of observations.")
-        }
-
-        differences <- group1_data - group2_data
-        positive_diffs <- sum(differences > 0)
-        negative_diffs <- sum(differences < 0)
-        zeros <- sum(differences == 0)
-        n_effective <- length(differences) - zeros # Exclude zeros
-
-        # Binomial test for number of positive differences
-        test_result <- binom.test(positive_diffs, n_effective, p = 0.5)
-
-        current_analysis_result$summary <- list(
-          "Sign Test Result" = test_result,
-          "Positive Differences" = positive_diffs,
-          "Negative Differences" = negative_diffs,
-          "Zero Differences" = zeros
-        )
-        current_analysis_result$plot <- function() {
-          hist(differences, main = "Distribution of Differences for Sign Test",
-               xlab = "Differences", ylab = "Frequency", breaks = 10)
-          abline(v = 0, col = "red", lty = 2)
-        }
-      
-      
-      
-      #WILCOXON
-      } else if (input$analysisType == "wilcoxon") {
-        req(input$responseVar, input$groupVar)
-        # Wilcoxon Signed-Rank Test is for paired data, similar to sign test
-        # Wilcoxon Rank-Sum Test (Mann-Whitney U) is for unpaired.
-        # Assuming you mean Wilcoxon Rank-Sum test for two groups here.
-        # If paired, you'd need to modify data input.
-        formula_str <- paste(input$responseVar, "~", input$groupVar)
-        test_result <- wilcox.test(as.formula(formula_str), data = df)
-        current_analysis_result$summary <- test_result
-        current_analysis_result$plot <- function() {
-          boxplot(as.formula(formula_str), data = df,
-                  main = paste("Wilcoxon Rank-Sum Test: ", input$responseVar, " by ", input$groupVar),
-                  xlab = input$groupVar, ylab = input$responseVar)
-        }
-      
-      
-      
-      #SPEARMAN / PEARSON
-      } else if (input$analysisType == "spearman" || input$analysisType == "pearson") {
-        req(input$var1, input$var2)
-        method <- ifelse(input$analysisType == "spearman", "spearman", "pearson")
-        correlation_result <- cor.test(df[[input$var1]], df[[input$var2]], method = method)
-        current_analysis_result$summary <- correlation_result
-        current_analysis_result$plot <- function() {
-          plot(df[[input$var1]], df[[input$var2]],
-               xlab = input$var1, ylab = input$var2,
-               main = paste(tools::toTitleCase(method), "Correlation Plot"))
-          abline(lm(df[[input$var2]] ~ df[[input$var1]]), col = "blue") # Add regression line
-        }
-      
-      
-      
-      #PERMTEST
-      } else if (input$analysisType == "permtest") {
-          current_analysis_result$summary <- "Permutation signed rank test is complex and requires specific packages/implementations. This is a placeholder."
-          current_analysis_result$plot <- function() {
-            plot(1,1, type = "n", main = "No plot for permutation test placeholder.")
-          }
-      
-      
-      
-      #GWR
-      } else if (input$analysisType == "gwr") {
-          current_analysis_result$summary <- "Geographically Weighted Regression (GWR) requires spatial data (sf or sp objects) and specific packages (e.g., spgwr). Data needs to be in a spatial format first."
-          current_analysis_result$plot <- function() {
-            plot(1,1, type = "n", main = "GWR requires spatial data visualization.")
-          }
-      
-      
-      
-      #FALLBACK CASE
-      } else {
-        current_analysis_result$summary <- "Analysis type not yet implemented or selected."
-        current_analysis_result$plot <- NULL
-      }
-
-      analysis_results$result <- current_analysis_result$summary
-      analysis_results$plot <- current_analysis_result$plot
-
-      updateTabsetPanel(session, "mainTabs", selected = "Analysis Results")
-
-    }, error = function(e) {
-      showNotification(paste("Error running analysis:", e$message), type = "error")
-      analysis_results$result <- paste("Error: ", e$message)
-      analysis_results$plot <- NULL
-    })
+observeEvent(input$runAnalysis, {
+  req(data(), input$analysisType)
+  
+  # Reset results and plot on new analysis run
+  analysis_results$result <- NULL
+  analysis_results$plot <- NULL
+  
+  df <- data()
+  
+  tryCatch({
+    showNotification(paste("Running", input$analysisType, "analysis..."), 
+                    type = "message")
+    
+    # Dispatch to the appropriate analysis function
+    model_result <- switch(
+      input$analysisType,
+      "linear" = run_linear_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars
+      ),
+      "logistic" = run_logistic_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars,
+        input$logisticFamily
+      ),
+      "anova" = run_anova_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "glmm" = run_glmm_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$randomEffect,
+        input$glmmFamily
+      ),
+      # Add other analysis types here
+      NULL
+    )
+    
+    # Store results if successful
+    if (!is.null(model_result)) {
+      analysis_results$result <- model_result$summary
+      analysis_results$plot <- model_result$plot
+    } else {
+      stop("Unsupported analysis type or missing parameters")
+    }
+    
+  }, error = function(e) {
+    showNotification(paste("Error in analysis:", e$message), 
+                    type = "error")
   })
+})
+
+  # Reactive to track if plot is available
+  output$analysisPlot_available <- reactive({
+    !is.null(analysis_results$plot)
+  })
+  outputOptions(output, "analysisPlot_available", suspendWhenHidden = FALSE)
 
   # Display analysis results
-  output$analysisResults <- renderPrint({
-    req(analysis_results$result)
-    analysis_results$result
-  })
+output$analysisResults <- renderPrint({
+  if (is.null(analysis_results$result)) {
+    return("Running analysis...")
+  }
+  analysis_results$result
+})
 
   # Display analysis plot
   output$analysisPlot <- renderPlot({
-    if (!is.null(analysis_results$plot)) {
+    req(analysis_results$plot)
+    tryCatch({
       analysis_results$plot()
-    } else {
-      plot(1, 1, type = "n", xlab = "", ylab = "", axes = FALSE)
-      text(1, 1, "Plot will appear here", cex = 1.5)
-    }
+    }, error = function(e) {
+      plot(1, 1, type = "n", main = "Error generating plot",
+           xlab = "", ylab = "", axes = FALSE)
+      text(1, 1, paste("Plot error:", e$message), cex = 1, col = "red")
+    })
   })
 }
 
