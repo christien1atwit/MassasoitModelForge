@@ -1409,6 +1409,11 @@ prepare_response_variable <- function(df, var_name) {
     # Include the CSS in the UI
     tagList(
       tags$head(tags$style(HTML(css_rules))),
+      if (input$analysisType == "glmm" || input$analysisType == "gee") {
+        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
+                     selected = "poisson")
+      },
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "glmm", "gamm", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney", "gwr")) {
@@ -1492,12 +1497,6 @@ prepare_response_variable <- function(df, var_name) {
         selectizeInput("logisticFamily", "Family for Logistic Regression:",
                      choices = c("binomial", "quasibinomial"),
                      selected = "binomial")
-      },
-
-      if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
-                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
-                     selected = "poisson")
       },
 
       if (input$analysisType == "chisq") {
