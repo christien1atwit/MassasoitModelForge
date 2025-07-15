@@ -3,11 +3,11 @@ library(shinyjs) # For JavaScript operations in Shiny
 library(reticulate)
 library(DT)
 library(readxl) # For reading Excel files
-library(lme4)   # For GLMMs
-library(mgcv)   # For GAMs/GAMMs
+library(lme4)   # For GLMMs (used by glmer and internally by gamm)
+library(mgcv)   # For GAMs/GAMMs (gamm, gam)
 library(MASS)   # For Negative Binomial Regression (glm.nb)
 library(pscl)   # For Zero-Inflated and Hurdle models
-library(geepack) # For GEE
+library(geepack) # For GEE (geeglm)
 library(spgwr) # For GWR
 library(readr)
 library(readxl)
@@ -403,7 +403,7 @@ ui <- fluidPage(
       ,
         div(class = "header-left",
           actionLink(
-            "appTitleLink",
+            "appTitleLink_about",
             "Massasoit Model Forge",
             class = "app-title-link"
           )
@@ -458,7 +458,7 @@ ui <- fluidPage(
             tags$span(class = "close", "×"),
             h3("Ian Handy"),
             p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: vyndyctyv")
+            p("Github: ian-handy")
           )
         ),
         
@@ -578,7 +578,7 @@ ui <- fluidPage(
         p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
           tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
-          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
+          tags$li(tags$a(href = "https://github.com/ian-handy", target = "_blank", "GitHub: vyndyctyv"))
         )
       )
     )
@@ -956,7 +956,7 @@ server <- function(input, output, session) {
     navigateToPage("app")
   })
 
-  observeEvent(input$appTitleLink, {
+  observeEvent(input$appTitleLink_about, {
     if (appState$currentPage != "landing") {
       navigateToPage("landing")
     }
@@ -1272,16 +1272,13 @@ server <- function(input, output, session) {
       print(utils::head(df, 5))
 })
 
-  output$analysisParams <- renderUI({
-    req(input$analysisType)
-    req(data()) 
+# Dynamic UI for analysis parameters (moves input$analysisType logic into renderUI)
+output$analysisParams <- renderUI({
+  df <- data()
+  if (is.null(df)) return(NULL)
 
-    if (input$analysisType == "") return(NULL)
-
-    # Get data and calculate non-NA counts
-    df <- data()
-    non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
-    total_rows <- nrow(df)
+  non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
+  total_rows <- nrow(df)
     
     # This is my attempt at right-aligning da N values
     css_rules <- lapply(seq_along(non_na_counts), function(i) {
@@ -1327,128 +1324,155 @@ prepare_response_variable <- function(df, var_name) {
 
 
 
-    # Format variable names (without N values in the text, they'll be added via CSS)
-    format_vars <- function(vars) {
-      setNames(vars, vars)
-    }
+  # Format variable names (without N values in the text, they'll be added via CSS)
+  format_vars <- function(vars) {
+    setNames(vars, vars)
+  }
 
-    all_data_cols <- format_vars(names(df))
-    num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
-    char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
+  all_data_cols <- format_vars(names(df))
+  num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
+  char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
 
     # Include the CSS in the UI
-    tagList(
-      tags$head(tags$style(HTML(css_rules))),
-      # Common parameters for most analyses
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
-                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
-        selectizeInput("responseVar", "Response Variable:",
-                     choices = num_data_cols,
-                     options = list(render = I(
-                       '{
-                         item: function(item, escape) { 
-                           return "<div>" + escape(item.label) + "</div>"; 
-                         }
-                       }'
-                     )))
-      },
+  tagList(
+    # Common parameters for most analyses
+    if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
+                                  "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
+      selectizeInput("responseVar", "Response Variable:",
+                     choices = num_data_cols, # Use formatted choices directly
+                   options = list(render = I(
+                     '{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }'
+                   )))
+    },
 
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
-        selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols,
-                     multiple = TRUE,
-                     options = list(
-                       render = I('{
-                         item: function(item, escape) { 
-                           return "<div>" + escape(item.label) + "</div>"; 
-                         }
-                       }')
-                     ))
-      },
+    if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
+      selectizeInput("predictorVars", "Predictor Variables:",
+                     choices = num_data_cols, # Use formatted choices directly
+                   multiple = TRUE,
+                   options = list(
+                     render = I('{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }')
+                   ))
+    },
 
-      if (input$analysisType %in% c("glmm", "gamm")) {
-        selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
-                       choices = char_data_cols,
-                       multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects",
-                       render = I('{
-                         item: function(item, escape) { 
-                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
-                         }
-                       }')
-                     ))
-      },
-
-      if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
-        selectizeInput("groupVar", "Grouping Variable:",
+    if (input$analysisType %in% c("glmm", "gamm")) {
+      selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
                      choices = char_data_cols,
-                     options = list(render = I(
-                       '{
-                         item: function(item, escape) { 
-                           return "<div>" + escape(item.label) + "</div>"; 
-                         }
-                       }'
-                     )))
-      },
+                     multiple = TRUE,
+                     options = list(placeholder = "Select grouping variable(s) for random intercepts",
+                     render = I('{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }')
+                   ))
+    },
 
-      if (input$analysisType == "logistic") {
-        selectizeInput("logisticFamily", "Family for Logistic Regression:",
-                     choices = c("binomial", "quasibinomial"),
-                     selected = "binomial")
-      },
+    # GAMM specific random effect input
+    if (input$analysisType == "gamm") {
+      selectizeInput("gammRandomEffectVars", "GAMM Random Effect Grouping Variables (Intercepts only):",
+                       choices = char_data_cols, # Use formatted choices directly
+                     multiple = TRUE,
+                     options = list(placeholder = "Select grouping variable(s) for random intercepts",
+                     render = I('{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }')
+                   ))
+    },
+    
+    # GEE specific ID variable input
+    if (input$analysisType == "gee") {
+      selectizeInput("geeIdVar", "GEE Cluster ID Variable (Select one):",
+                     choices = char_data_cols, # Use formatted choices directly
+                     multiple = FALSE, # Only one ID variable allowed for GEE
+                     options = list(placeholder = "Select one ID variable",
+                     render = I('{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }')
+                   ))
+    },
 
-      if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
-                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
-                     selected = "poisson")
-      },
+    if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
+      selectizeInput("groupVar", "Grouping Variable:",
+                     choices = char_data_cols, # Use formatted choices directly
+                   options = list(render = I(
+                     '{
+                       item: function(item, escape) { 
+                         return "<div>" + escape(item.label) + "</div>"; 
+                       }
+                     }'
+                   )))
+    },
 
-      if (input$analysisType == "chisq") {
-        tagList(
-          selectizeInput("chisqVar", "Variable for Chi-squared Test:",
-                        choices = all_data_cols,
-                        options = list(render = I(
-                          '{
-                            item: function(item, escape) { 
-                              return "<div>" + escape(item.label) + "</div>"; 
-                            }
-                          }'
-                        ))),
-          textInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
-                    value = "",
-                    placeholder = "e.g., 0.25, 0.75"),
-          helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
-        )
-      },
+    if (input$analysisType == "logistic") {
+      selectizeInput("logisticFamily", "Family for Logistic Regression:",
+                   choices = c("binomial", "quasibinomial"),
+                   selected = "binomial")
+    },
+
+    if (input$analysisType == "glmm" || input$analysisType == "gee") {
+        selectInput("glmmFamily", "Family for GLMM/GEE:", # Changed to selectInput as it's simpler and doesn't needs dynamic search
+                   choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
+                   selected = "poisson")
+    },
+
+    if (input$analysisType == "chisq") {
+      tagList(
+        selectizeInput("chisqVar", "Variable for Chi-squared Test:",
+                        choices = all_data_cols, # Use formatted choices directly
+                      options = list(render = I(
+                        '{
+                          item: function(item, escape) { 
+                            return "<div>" + escape(item.label) + "</div>"; 
+                          }
+                        }'
+                      ))),
+        textInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
+                  value = "",
+                  placeholder = "e.g., 0.25, 0.75"),
+        helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
+      )
+    },
 
       if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
-        tagList(
-          selectizeInput("var1", "Variable 1:",
-                       choices = all_data_cols,
-                       options = list(render = I(
-                         '{
-                           item: function(item, escape) { 
-                             return "<div>" + escape(item.label) + "</div>"; 
-                           }
-                         }'
-                       ))),
-          selectizeInput("var2", "Variable 2:",
-                       choices = all_data_cols,
-                       options = list(render = I(
-                         '{
-                           item: function(item, escape) { 
-                             return "<div>" + escape(item.label) + "</div>"; 
-                           }
-                         }'
-                       )))
-        )
-      },
+      tagList(
+        selectizeInput("var1", "Variable 1:",
+                     choices = all_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     ))),
+        selectizeInput("var2", "Variable 2:",
+                     choices = all_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      )
+    },
       # Add more specific parameters as needed for other models
-      if (input$analysisType == "permtest") {
-        helpText("Permutation signed rank test requires a specific implementation (e.g., from 'coin' package).")
-      }
-    )
-  })
+    if (input$analysisType == "permtest") {
+      helpText("Permutation signed rank test requires a specific implementation (e.g., from 'coin' package).")
+    }
+  )
+})
 
 
   # Run analysis when the run button is clicked

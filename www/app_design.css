@@ -205,25 +205,17 @@
 
 /* Buttons */
 .btn, .btn-primary, .action-button {
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 20px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-align: center;
-  display: inline-block;
-  margin: 5px 0;
-  width: 100%;
+  padding: 2px 10px !important;
+  font-size: 1em !important;
+  border-radius: 4px !important;
+  text-transform: none !important;
+  margin: 0 0.3em 0 0 !important;
+  vertical-align: baseline !important;
+  line-height: 1.2 !important;
 }
 
 .btn:hover, .btn-primary:hover, .action-button:hover {
-  background-color: #2980b9;
+  background-color: #050e14;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -324,8 +316,9 @@
   }
   
   .btn, .btn-primary, .action-button {
-    padding: 8px 15px;
+    padding: 0px 0px;
     font-size: 13px;
+    text-indent: 0px;
   }
 }
 
@@ -806,23 +799,43 @@
   position: relative;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .landing-content {
-    padding: 25px;
-    margin: 15px;
-  }
-  
-  .landing-title {
-    font-size: 2.2em;
-  }
-  
-  .landing-description {
-    font-size: 1.1em;
-  }
-  
-  .enter-app-btn {
-    padding: 12px 30px;
-    font-size: 1em;
-  }
+/* Text link styles */
+.action-button.text-link,
+.btn.text-link,
+.btn-primary.text-link {
+  background: none !important;
+  border: none !important;
+  color: #3498db !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 1em !important;
+  font-weight: normal !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+  display: inline !important;
+  line-height: inherit !important;
+  vertical-align: baseline !important;
+  transition: color 0.2s;
+  text-indent: 0;
+}
+
+.action-button.text-link:hover,
+.btn.text-link:hover,
+.btn-primary.text-link:hover {
+  color: #217dbb !important;
+  text-decoration: underline !important;
+}
+
+.landing-title > .button-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.button-container > button {
+  display: flex;
+  flex-direction: column;
 }
