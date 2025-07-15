@@ -1399,15 +1399,33 @@ prepare_response_variable <- function(df, var_name) {
     num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
     char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
     logistic_cols <- format_vars(names(df)[sapply(names(df), function(col) is_logistic_response(df, col) != "unsuitable")])
+    
+    # For negative binomial, filter numeric variables that are counts (non-negative integers)
+    nb_cols <- format_vars(names(df)[sapply(names(df), function(x) {
+      var <- df[[x]]
+      is.numeric(var) && all(!is.na(var) & var >= 0 & var == floor(var))
+    })])
 
     # Include the CSS in the UI
     tagList(
       tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
-      if (input$analysisType %in% c("linear", "glmm", "gamm", "negbin", "anova", "kruskal",
+      if (input$analysisType %in% c("linear", "glmm", "gamm", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney", "gwr")) {
         selectizeInput("responseVar", "Response Variable:",
                      choices = num_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      },
+
+      if (input$analysisType == "negbin") {
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = nb_cols,
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -1546,41 +1564,36 @@ observeEvent(input$runAnalysis, {
     # Dispatch to the appropriate analysis function
     model_result <- switch(
       input$analysisType,
-      "linear" = {
-        req(input$responseVar, input$predictorVars)
-        run_linear_analysis(
-          df, 
-          input$responseVar, 
-          input$predictorVars
-        )
-      },
-      "logistic" = {
-        req(input$responseVar, input$predictorVars, input$logisticFamily)
-        run_logistic_analysis(
-          df, 
-          input$responseVar, 
-          input$predictorVars,
-          input$logisticFamily
-        )
-      },
-      "anova" = {
-        req(input$responseVar, input$groupVar)
-        run_anova_analysis(
-          df,
-          input$responseVar,
-          input$groupVar
-        )
-      },
-      "glmm" = {
-        req(input$responseVar, input$predictorVars, input$randomEffect, input$glmmFamily)
-        run_glmm_analysis(
-          df,
-          input$responseVar,
-          input$predictorVars,
-          input$randomEffect,
-          input$glmmFamily
-        )
-      },
+      "linear" = run_linear_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars
+      ),
+      "logistic" = run_logistic_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars,
+        input$logisticFamily
+      ),
+      "anova" = run_anova_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "glmm" = run_glmm_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$randomEffect,
+        input$glmmFamily
+      ),
+      "gee" = run_gee_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$clusterID,
+        input$glmmFamily
+      ),
       "gwr" = {
         req(input$responseVar, input$predictorVars)
         run_gwr_analysis(
@@ -1589,6 +1602,43 @@ observeEvent(input$runAnalysis, {
           input$predictorVars
         )
       },
+      "negbin" = {
+        # For negative binomial, ensure we have a count variable
+        var <- df[[input$responseVar]]
+        if (!(is.numeric(var) && all(!is.na(var) & var >= 0 & var == floor(var)))) {
+          stop("Response variable must be a count variable (non-negative integers)")
+        }
+        
+        # Run negative binomial regression
+        formula_str <- paste0(input$responseVar, " ~ ", paste(input$predictorVars, collapse = " + "))
+        model <- MASS::glm.nb(as.formula(formula_str), data = df)
+        
+        list(
+          summary = summary(model),
+          plot = function() {
+            if (length(input$predictorVars) > 0) {
+              predictor_to_plot <- input$predictorVars[1]
+              plot_data <- data.frame(
+                x = df[[predictor_to_plot]],
+                y = df[[input$responseVar]],
+                predicted = predict(model, type = "response")
+              )
+              
+              plot(
+                plot_data$x,
+                plot_data$predicted,
+                xlab = predictor_to_plot,
+                ylab = "Predicted Counts",
+                main = "Negative Binomial Regression",
+                pch = 16,
+                col = "blue"
+              )
+              abline(h = 0, lty = 2)
+            }
+          }
+        )
+      },
+      # Add other analysis types here
       NULL
     )
     
