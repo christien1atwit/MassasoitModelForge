@@ -1450,8 +1450,60 @@ prepare_response_variable <- function(df, var_name) {
     )
   })
 
-})
-r missing parameters")
+
+  # Run analysis when the run button is clicked
+observeEvent(input$runAnalysis, {
+  req(data(), input$analysisType)
+  
+  # Reset results and plot on new analysis run
+  analysis_results$result <- NULL
+  analysis_results$plot <- NULL
+  
+  df <- data()
+  
+  tryCatch({
+    showNotification(paste("Running", input$analysisType, "analysis..."), 
+                    type = "message")
+    
+    # Dispatch to the appropriate analysis function
+    model_result <- switch(
+      input$analysisType,
+      "linear" = run_linear_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars
+      ),
+      "logistic" = run_logistic_analysis(
+        df, 
+        input$responseVar, 
+        input$predictorVars,
+        input$logisticFamily
+      ),
+      "anova" = run_anova_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "glmm" = run_glmm_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$randomEffect,
+        input$glmmFamily
+      ),
+      # Add other analysis types here
+      NULL
+    )
+    
+    # Store results if successful
+    if (!is.null(model_result)) {
+      analysis_results$result <- model_result$summary
+      analysis_results$plot <- model_result$plot
+      
+      # Switch to results tab after successful analysis
+      updateTabsetPanel(session, "mainTabs", selected = "Analysis Results")
+    } else {
+      stop("Unsupported analysis type or missing parameters")
     }
     
   }, error = function(e) {
