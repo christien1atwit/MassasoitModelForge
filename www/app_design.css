@@ -18,33 +18,26 @@
   flex: 1;
 }
 
-.header-right {
+.app-header .header-right {
   flex: 1;
   text-align: right;
 }
 
 /* Target the specific header title link */
-#appTitleLink,
-.app-header #appTitleLink,
 .app-header a#appTitleLink {
-  color: #2c3e50 !important;
-  font-size: 3.5rem !important;
-  line-height: 1.2 !important;
-  font-weight: 400 !important;
-  text-decoration: none !important;
-  transition: color 0.3s ease !important;
-  background: none !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  font-family: 'DM Serif Display', Georgia, serif !important;
-  letter-spacing: 0.5px !important;
-  cursor: pointer !important;
-  display: inline-block !important;
-  text-transform: none !important;
+  color: #2c3e50;
+  font-size: 3.5rem;
+  line-height: 1.2;
+  font-weight: 400;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  font-family: 'DM Serif Display', Georgia, serif;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  text-transform: none;
 }
 
-.app-title-link:hover {
+.app-header .app-title-link:hover {
   color: #3498db;
   text-decoration: none;
 }
@@ -59,8 +52,8 @@
   transform: scale(1.05);
 }
 
-/* Main styling for the application */
-.page {
+/* Main application container */
+.app-container {
   position: fixed;
   top: 0;
   left: 0;
@@ -75,31 +68,50 @@
   line-height: 1.8;
 }
 
-/* Increase font size for form elements */
-.form-control, .selectize-input, .selectize-dropdown {
-  font-size: 16px !important;
-  padding: 8px 12px !important;
-  height: auto !important;
+/* Form elements */
+.app-container .form-group {
+  margin-bottom: 20px;
 }
 
-/* Increase size of radio buttons and checkboxes */
-.radio label, .checkbox label {
-  font-size: 16px !important;
+.app-container .form-group .form-control,
+.app-container .form-group .selectize-input,
+.app-container .form-group .selectize-control.single .selectize-input,
+.app-container .form-group .selectize-control.multi .selectize-input {
+  font-size: 16px;
+  padding: 8px 12px;
+  height: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app-container .form-group .radio label,
+.app-container .form-group .checkbox label {
+  font-size: 16px;
   padding-left: 25px;
   margin-bottom: 10px;
 }
 
-.radio input[type="radio"], 
-.checkbox input[type="checkbox"] {
+.app-container .form-group .radio input[type="radio"],
+.app-container .form-group .checkbox input[type="checkbox"] {
   width: 18px;
   height: 18px;
   margin-left: -25px;
   margin-top: 3px;
 }
 
+.app-container .form-group .form-control:focus,
+.app-container .form-group .selectize-input.focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  outline: none;
+}
+
 /* Increase tab text size */
-.nav-tabs > li > a {
-  font-size: 16px !important;
+.app-container .nav-tabs > li > a {
+  font-size: 16px;
   padding: 10px 15px !important;
 }
 
@@ -129,105 +141,38 @@
   background-color: #fff;
 }
 
-/* Form labels */
-.control-label {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: #2c3e50;
-}
-
-/* Sidebar and content area */
-.sidebar-panel {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-.main-panel {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 25px;
-  height: 100%;
-  overflow-y: auto;
-}
-
-/* Main content container */
-.main-content-container {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-  margin: 30px auto 50px;
-  padding: 30px;
-  position: relative;
-  z-index: 2;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .main-content-container {
-    margin: 15px;
-    padding: 20px;
-  }
-  
-  .sidebar-panel, 
-  .main-panel {
-    margin: 0 0 20px 0;
-    height: auto;
-    min-height: auto;
-  }
-}
-
-/* Form elements */
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-control, .selectize-input, .selectize-control.single .selectize-input {
-  border: 1px solid #ddd;
+/* Button styles */
+.app-container .btn,
+.app-container .btn-primary,
+.app-container .action-button {
+  padding: 2px 10px;
+  font-size: 1em;
   border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 14px;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  width: 100%;
-  box-sizing: border-box;
+  text-transform: none;
+  margin: 0 0.3em 0 0;
+  vertical-align: baseline;
+  line-height: 1.2;
 }
 
-.form-control:focus, .selectize-input.focus, .selectize-control.multi .selectize-input.focus {
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  outline: none;
-}
-
-/* Buttons */
-.btn, .btn-primary, .action-button {
-  padding: 2px 10px !important;
-  font-size: 1em !important;
-  border-radius: 4px !important;
-  text-transform: none !important;
-  margin: 0 0.3em 0 0 !important;
-  vertical-align: baseline !important;
-  line-height: 1.2 !important;
-}
-
-.btn:hover, .btn-primary:hover, .action-button:hover {
+.app-container .btn:hover,
+.app-container .btn-primary:hover,
+.app-container .action-button:hover {
   background-color: #050e14;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.btn:active, .btn-primary:active, .action-button:active {
+.app-container .btn:active,
+.app-container .btn-primary:active,
+.app-container .action-button:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Tabs */
-.nav-tabs > li > a {
+/* Tab navigation */
+.app-container .nav-tabs > li > a {
   color: #7f8c8d;
+  background-color: #f8f9fa;
   border: none;
   padding: 12px 20px;
   margin-right: 5px;
@@ -236,23 +181,23 @@
   transition: all 0.3s ease;
 }
 
-.nav-tabs > li.active > a,
-.nav-tabs > li.active > a:hover,
-.nav-tabs > li.active > a:focus {
-  color: #3498db;
-  background-color: #fff;
+.app-container .nav-tabs > li.active > a,
+.app-container .nav-tabs > li.active > a:hover,
+.app-container .nav-tabs > li.active > a:focus {
+  color: #fff;
+  background-color: #3498db;
   border: none;
   border-bottom: 3px solid #3498db;
 }
 
-.nav-tabs > li > a:hover {
+.app-container .nav-tabs > li > a:hover {
   background-color: #f5f5f5;
   border: none;
   color: #3498db;
 }
 
-/* Data table */
-.dataTables_wrapper {
+/* Data table container */
+.app-container .dataTables_wrapper {
   margin-top: 20px;
   background: #fff;
   padding: 20px;
@@ -260,8 +205,8 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
-/* Analysis results */
-#analysisResults {
+/* Analysis results container */
+.app-container #analysisResults {
   background: #fff;
   padding: 20px;
   border-radius: 8px;
@@ -273,8 +218,8 @@
   overflow-x: auto;
 }
 
-/* Plot container */
-#analysisPlot {
+/* Analysis plot container */
+.app-container #analysisPlot {
   background: #fff;
   padding: 20px;
   border-radius: 8px;
