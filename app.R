@@ -3,18 +3,19 @@ library(shinyjs) # For JavaScript operations in Shiny
 library(reticulate)
 library(DT)
 library(readxl) # For reading Excel files
-library(lme4)   # For GLMMs (used by glmer and internally by gamm)
-library(mgcv)   # For GAMs/GAMMs (gamm, gam)
+library(lme4)   # For GLMMs
+library(mgcv)   # For GAMs/GAMMs
 library(MASS)   # For Negative Binomial Regression (glm.nb)
 library(pscl)   # For Zero-Inflated and Hurdle models
-library(geepack) # For GEE (geeglm)
+library(geepack) # For GEE
 library(spgwr) # For GWR
 library(readr)
 library(readxl)
+library(ggplot2)
 
 
 # in R studio, write and run a file with the following code:
-# install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr"))
+# install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr", "ggplot2"))
 # library(reticulate)
 # reticulate::install_miniconda()  # If not already installed
 # reticulate::conda_create("MassasoitModelForge_env")
@@ -119,6 +120,28 @@ tryCatch({
 
 
 
+# Function to read and clean data (Can be expanded for more than logistic regression)
+read_data_file <- function(file_path, file_name) {
+  # ... existing code ...
+  
+  # After loading and cleaning data
+  df <- clean_and_convert(df)
+  
+  # Identify suitable logistic response variables
+  suitable_logistic_vars <- sapply(names(df), function(col) {
+    is_logistic_response(df, col)
+  })
+  
+  # Store suitable variables in reactive value
+  suitable_response_vars <- reactiveVal()
+  suitable_response_vars(names(df)[suitable_logistic_vars])
+  
+  return(df)
+}
+
+
+
+
 
 # Linear Regression Analysis
 run_linear_analysis <- function(df, response_var, predictor_vars) {
@@ -169,7 +192,108 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
   )
 }
 
+# Function to identify and categorize suitable logistic response variables
+is_logistic_response <- function(df, col_name) {
+  col <- df[[col_name]]
+  
+  # Check if column is numeric or logical
+  if (!is.numeric(col) && !is.logical(col)) {
+    return("unsuitable")
+  }
+  
+  # For numeric columns
+  if (is.numeric(col)) {
+    # Remove NA values for checking
+    col <- na.omit(col)
+    
+    # Check if all values are either 0 or 1
+    if (all(col %in% c(0, 1))) {
+      return("binary")
+    }
+    
+    # Check if all values are proportions (0 <= x <= 1)
+    if (all(col >= 0 & col <= 1)) {
+      return("proportion")
+    }
+    
+    # Check if column has only non-zero values of same sign
+    non_zero <- col[col != 0]
+    if (length(non_zero) > 0) {
+      # Check if all non-zero values are positive or all negative
+      if (all(non_zero > 0) || all(non_zero < 0)) {
+        return("convertible")
+      }
+    }
+    
+    return("unsuitable")
+  }
+  
+  # For logical columns, they're automatically suitable
+  return("binary")
+}
 
+# Function to convert convertible variables to binary
+convert_to_binary <- function(df, col_name) {
+  col <- df[[col_name]]
+  
+  # Convert non-zero values to 1, keep zeros as 0
+  df[[col_name]] <- ifelse(col != 0, 1, 0)
+  return(df)
+}
+
+# Add this function before the analysis dispatch in the server section
+run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
+  # Convert convertible variables before analysis
+  var_type <- is_logistic_response(df, response_var)
+  if (var_type == "convertible") {
+    df <- convert_to_binary(df, response_var)
+  }
+  
+  # Prepare formula
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  
+  # Run logistic regression with proper error handling
+  tryCatch({
+    model <- glm(as.formula(formula_str), family = family, data = df)
+    
+    # Create summary and plot
+    model_summary <- summary(model)
+    
+    # Create a plot of predicted probabilities vs. predictor variable
+    if (length(predictor_vars) > 0) {
+      predictor_to_plot <- predictor_vars[1]
+      plot_data <- data.frame(
+        x = df[[predictor_to_plot]],
+        y = df[[response_var]],
+        predicted = predict(model, type = "response")
+      )
+      
+      # Create ggplot
+      p <- ggplot(plot_data, aes(x = x)) +
+        geom_point(aes(y = y), color = "red", size = 2) +
+        geom_line(aes(y = predicted), color = "blue", size = 1) +
+        labs(
+          x = predictor_to_plot,
+          y = "Predicted Probability",
+          title = "Logistic Regression: Predicted Probabilities"
+        ) +
+        theme_minimal()
+    } else {
+      p <- ggplot() +
+        labs(
+          title = "No plot available for this configuration"
+        )
+    }
+    
+    list(
+      summary = model_summary,
+      plot = p
+    )
+  }, error = function(e) {
+    showNotification(paste("Error running logistic regression:", e$message), type = "error")
+    NULL
+  })
+}
 
 # ANOVA Analysis
 run_anova_analysis <- function(df, response_var, group_var) {
@@ -290,7 +414,7 @@ ui <- fluidPage(
       ,
         div(class = "header-left",
           actionLink(
-            "appTitleLink_about",
+            "appTitleLink",
             "Massasoit Model Forge",
             class = "app-title-link"
           )
@@ -321,9 +445,9 @@ ui <- fluidPage(
         # About Us Section
         h2("Who We Are"),
         p("  \t     We're ",
-          actionLink("sammyLink", "Sammy Olsen", style = "color: #3498db; cursor: pointer; text-decoration: underline;"),
+          tags$a(id = "sammyLink", onclick = "event.preventDefault();", "Sammy Olsen", style = "color: #3498db; text-decoration: underline; cursor: pointer;"),
           " and ",
-          actionLink("ianLink", "Ian Handy", style = "color: #3498db; cursor: pointer; text-decoration: underline;"),
+          tags$a(id = "ianLink", onclick = "event.preventDefault();", "Ian Handy", style = "color: #3498db; text-decoration: underline; cursor: pointer;"),
           ", data scientists who got \
         our start at Massasoit Community College. This app began as a \
         tool for a very specific purpose: to help make sense of over a \
@@ -345,7 +469,7 @@ ui <- fluidPage(
             tags$span(class = "close", "×"),
             h3("Ian Handy"),
             p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: ian-handy")
+            p("Github: vyndyctyv")
           )
         ),
         
@@ -465,7 +589,7 @@ ui <- fluidPage(
         p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
           tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
-          tags$li(tags$a(href = "https://github.com/ian-handy", target = "_blank", "GitHub: vyndyctyv"))
+          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
         )
       )
     )
@@ -657,13 +781,13 @@ ui <- fluidPage(
               tabsetPanel(
                 id = "mainTabs",
                 tabPanel(
-                  "Data", 
+                  "View File",
                   div(class = "table-responsive",
                     DTOutput("dataTable")
                   )
                 ),
                 
-                tabPanel("Summary", 
+                tabPanel("Data Summary",
                   div(class = "summary-output",
                     verbatimTextOutput("summary")
                   )
@@ -699,6 +823,137 @@ ui <- fluidPage(
 
 # Server logic
 server <- function(input, output, session) {
+  # Function to safely convert columns to appropriate types
+  clean_and_convert <- function(df) {
+    # Function to guess and convert column types
+    convert_column <- function(x) {
+      # Remove any non-numeric characters from potential numeric columns
+      clean_x <- gsub("[^0-9.-]", "", x)
+
+      # Try to convert to numeric if possible
+      num_x <- suppressWarnings(as.numeric(clean_x))
+      if (!all(is.na(num_x)) && !all(is.na(x) | x == "")) {
+        return(num_x)
+      }
+
+      # Check for logical values
+      if (all(tolower(x) %in% c("true", "false", "t", "f", "", NA))) {
+        return(as.logical(x))
+      }
+
+      # Check for dates (simple check)
+      if (any(grepl("\\d{1,4}[-/]\\d{1,2}[-/]\\d{1,4}", x, ignore.case = TRUE))) {
+        date_x <- as.Date(x, optional = TRUE)
+        if (!all(is.na(date_x))) {
+          return(date_x)
+        }
+      }
+
+      # Return as character if no other type fits
+      return(x)
+    }
+
+    # Apply conversion to each column
+    df[] <- lapply(df, function(col) {
+      # Skip if column is already in a good format
+      if (is.numeric(col) || is.logical(col) || inherits(col, "Date")) {
+        return(col)
+      }
+      convert_column(col)
+    })
+
+    return(df)
+  }
+
+  # Reactive value to store suitable response variables for logistic regression
+  suitable_response_vars <- reactiveVal(NULL)
+
+  # Update suitable response variables when data is loaded
+  observeEvent(input$loadData, {
+    if (!is.null(data())) {
+      df <- data()
+      suitable_response_vars(names(df)[sapply(names(df), function(col) {
+        is_logistic_response(df, col)
+      })])
+    }
+  })
+
+  # Reactive value to store suitable variables
+  suitable_vars <- reactiveVal(NULL)
+  suitable_vars_types <- reactiveVal(NULL)
+
+  # Update suitable variables when data is loaded
+  observeEvent(input$loadData, {
+    if (!is.null(data())) {
+      df <- data()
+      
+      # Get all variable types
+      var_types <- lapply(names(df), function(col) {
+        is_logistic_response(df, col)
+      })
+      names(var_types) <- names(df)
+      suitable_vars_types(var_types)
+      
+      # Get only suitable variables
+      suitable_vars(names(df)[sapply(var_types, function(x) x != "unsuitable")])
+    }
+  })
+
+  # Function to format variable names with conversion info
+  format_variable_name <- function(var_name, var_type) {
+    if (var_type == "convertible") {
+      return(paste0(var_name, " <span style='color: red;'>Will be Converted</span>"))
+    }
+    return(var_name)
+  }
+
+  # Function to format variable names with conversion info
+  format_variable_name <- function(var_name, var_type) {
+    if (var_type == "convertible") {
+      return(paste0(var_name, " <span style='color: red;'>Will be Converted</span>"))
+    }
+    return(var_name)
+  }
+
+  # Render response variable selector with conversion info
+  output$responseVarSelector <- renderUI({
+    req(data(), input$analysisType)
+    
+    if (input$analysisType == "logistic") {
+      # Get all variable types
+      var_types <- lapply(names(data()), function(col) {
+        is_logistic_response(data(), col)
+      })
+      names(var_types) <- names(data())
+      
+      # Get suitable variables
+      suitable_vars_list <- names(data())[sapply(var_types, function(x) x != "unsuitable")]
+      
+      # Create choices with conversion info
+      choices <- setNames(
+        sapply(suitable_vars_list, function(var) {
+          format_variable_name(var, var_types[[var]])
+        }),
+        suitable_vars_list
+      )
+      
+      selectInput(
+        "responseVar",
+        "Response Variable:",
+        choices = choices,
+        selected = NULL
+      )
+    } else if (input$analysisType != "") {
+      selectInput(
+        "responseVar",
+        "Response Variable:",
+        choices = names(data()),
+        selected = NULL
+      )
+    }
+  })
+
+  # ... rest of existing server code ...
   # Initialize app - show only landing page initially
   shinyjs::runjs("$('#landingPage').addClass('page').show();")
   shinyjs::runjs("$('#mainApp, #aboutPage').addClass('page').hide();")
@@ -712,7 +967,7 @@ server <- function(input, output, session) {
     navigateToPage("app")
   })
 
-  observeEvent(input$appTitleLink_about, {
+  observeEvent(input$appTitleLink, {
     if (appState$currentPage != "landing") {
       navigateToPage("landing")
     }
@@ -881,62 +1136,105 @@ server <- function(input, output, session) {
     return(df)
   }
 
-# Load data when button is clicked
+  # Load data when button is clicked
   observeEvent(input$loadData, {
     tryCatch({
       if (input$dataSource == "base" && !is.null(input$baseFile)) {
         # Load single base file
         file_path <- file.path("Base_Data_Files", input$baseFile)
-        df <- read_data_file(file_path, input$baseFile)
+        
+        # Read the file with appropriate function
+        if (grepl("\\.xlsx?$", input$baseFile, ignore.case = TRUE)) {
+          # For Excel files, read all as text first to avoid type guessing issues
+          df <- readxl::read_excel(file_path, col_types = "text")
+        } else if (grepl("\\.csv$", input$baseFile, ignore.case = TRUE)) {
+          # For CSV files, read all as character first
+          df <- readr::read_csv(file_path, col_types = cols(.default = col_character()), 
+                               show_col_types = FALSE)
+        } else {
+          stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
+        }
+        
+        # Clean and convert column types
+        df <- clean_and_convert(df)
+        
+        # Store the data
         data(df)
-        merged_data(NULL)  # Reset merged data
-        showNotification(paste("Loaded base file:", input$baseFile), 
-                        type = "message")
+        
+        # Update suitable variables and types
+        var_types <- lapply(names(df), function(col) {
+          is_logistic_response(df, col)
+        })
+        names(var_types) <- names(df)
+        suitable_vars_types(var_types)
+        suitable_vars(names(df)[sapply(var_types, function(x) x != "unsuitable")])
       } else if (input$dataSource == "upload" && !is.null(input$file1)) {
-        # Handle multiple file uploads
-        files <- input$file1
-        dfs <- list()
-
-        # Read all files
-        for (i in seq_len(nrow(files))) {
-          df <- read_data_file(files$datapath[i], files$name[i])
-          dfs[[files$name[i]]] <- df
+        # Load uploaded files
+        uploaded_files <- input$file1
+        df_list <- list()
+        
+        for (file in uploaded_files) {
+          if (grepl("\\.xlsx?$", file$name, ignore.case = TRUE)) {
+            df <- readxl::read_excel(file$datapath, col_types = "text")
+          } else if (grepl("\\.csv$", file$name, ignore.case = TRUE)) {
+            df <- readr::read_csv(file$datapath, col_types = cols(.default = col_character()), 
+                                 show_col_types = FALSE)
+          } else {
+            stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
+          }
+          df_list[[file$name]] <- df
         }
-
-        # If only one file, use it directly
-        if (length(dfs) == 1) {
-          data(dfs[[1]])
-          merged_data(NULL)
-          showNotification("File loaded successfully!", type = "message")
-          return()
+        
+        # Merge all uploaded files
+        if (length(df_list) > 0) {
+          df <- Reduce(function(x, y) merge(x, y, all = TRUE), df_list)
+          
+          # Clean and convert column types after merge
+          df <- clean_and_convert(df)
+          
+          # Store the data
+          data(df)
+          
+          # Update suitable variables and types
+          var_types <- lapply(names(df), function(col) {
+            is_logistic_response(df, col)
+          })
+          names(var_types) <- names(df)
+          suitable_vars_types(var_types)
+          suitable_vars(names(df)[sapply(var_types, function(x) x != "unsuitable")])
         }
-
-        # For multiple files, check row counts
-        row_counts <- sapply(dfs, nrow)
-        if (length(unique(row_counts)) > 1) {
-          showModal(modalDialog(
-            title = "Incompatible Data",
-            "The selected files have different numbers of rows and cannot be merged.",
-            easyClose = TRUE,
-            footer = modalButton("OK")
-          ))
-          return()
-        }
-
-        # Merge data frames by columns
-        merged_df <- do.call(cbind, dfs)
-        data(merged_df)
-        merged_data(merged_df)
-        showNotification(
-          paste("Successfully merged", length(dfs), "files with", 
-                nrow(merged_df), "rows and", ncol(merged_df), "columns"),
-          type = "message"
-        )
       } else if (input$dataSource == "api") {
-        # Placeholder for API data loading
-        showNotification("API integration will be implemented here", 
-                        type = "message")
-        return(NULL)
+        # Load from API
+        if (input$apiSource == "Traffic") {
+          # Traffic API implementation
+          df <- data.frame(
+            Location = input$trafficLocation,
+            StartDate = input$trafficDates[1],
+            EndDate = input$trafficDates[2]
+          )
+        } else if (input$apiSource == "Visual Crossing") {
+          # Visual Crossing API implementation
+          df <- data.frame(
+            Location = input$vcLocation,
+            StartDate = input$vcDates[1],
+            EndDate = input$vcDates[2],
+            UnitGroup = input$vcUnitGroup
+          )
+        }
+        
+        # Clean and convert column types
+        df <- clean_and_convert(df)
+        
+        # Store the data
+        data(df)
+        
+        # Update suitable variables and types
+        var_types <- lapply(names(df), function(col) {
+          is_logistic_response(df, col)
+        })
+        names(var_types) <- names(df)
+        suitable_vars_types(var_types)
+        suitable_vars(names(df)[sapply(var_types, function(x) x != "unsuitable")])
       }
     }, error = function(e) {
       showNotification(paste("Error loading data:", e$message), 
@@ -985,13 +1283,16 @@ server <- function(input, output, session) {
       print(utils::head(df, 5))
 })
 
-# Dynamic UI for analysis parameters (moves input$analysisType logic into renderUI)
-output$analysisParams <- renderUI({
-  df <- data()
-  if (is.null(df)) return(NULL)
+  output$analysisParams <- renderUI({
+    req(input$analysisType)
+    req(data()) 
 
-  non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
-  total_rows <- nrow(df)
+    if (input$analysisType == "") return(NULL)
+
+    # Get data and calculate non-NA counts
+    df <- data()
+    non_na_counts <- sapply(df, function(x) sum(!is.na(x)))
+    total_rows <- nrow(df)
     
     # This is my attempt at right-aligning da N values
     css_rules <- lapply(seq_along(non_na_counts), function(i) {
@@ -1018,146 +1319,42 @@ output$analysisParams <- renderUI({
 
 ##########################################################################
 
+####################### Function to handle variable conversion before analysis
+prepare_response_variable <- function(df, var_name) {
+  var_type <- suitable_vars_types()[[var_name]]
+  
+  if (var_type == "convertible") {
+    df <- convert_to_binary(df, var_name)
+  }
+  
+  return(df)
+}
+
+##########################################################################
+
 ######################     Code for analysis           ###################
 
 ##########################################################################
 
 
 
-  # Format variable names (without N values in the text, they'll be added via CSS)
-  format_vars <- function(vars) {
-    setNames(vars, vars)
-  }
+    # Format variable names (without N values in the text, they'll be added via CSS)
+    format_vars <- function(vars) {
+      setNames(vars, vars)
+    }
 
-  all_data_cols <- format_vars(names(df))
-  num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
-  char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
+    all_data_cols <- format_vars(names(df))
+    num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
+    char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
 
     # Include the CSS in the UI
-  tagList(
-    # Common parameters for most analyses
-    if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
-                                  "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
-      selectizeInput("responseVar", "Response Variable:",
-                     choices = num_data_cols, # Use formatted choices directly
-                   options = list(render = I(
-                     '{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }'
-                   )))
-    },
-
-    if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
-      selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols, # Use formatted choices directly
-                   multiple = TRUE,
-                   options = list(
-                     render = I('{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }')
-                   ))
-    },
-
-    if (input$analysisType %in% c("glmm", "gamm")) {
-      selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
-                     choices = char_data_cols,
-                     multiple = TRUE,
-                     options = list(placeholder = "Select grouping variable(s) for random intercepts",
-                     render = I('{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }')
-                   ))
-    },
-
-    # GAMM specific random effect input
-    if (input$analysisType == "gamm") {
-      selectizeInput("gammRandomEffectVars", "GAMM Random Effect Grouping Variables (Intercepts only):",
-                       choices = char_data_cols, # Use formatted choices directly
-                     multiple = TRUE,
-                     options = list(placeholder = "Select grouping variable(s) for random intercepts",
-                     render = I('{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }')
-                   ))
-    },
-    
-    # GEE specific ID variable input
-    if (input$analysisType == "gee") {
-      selectizeInput("geeIdVar", "GEE Cluster ID Variable (Select one):",
-                     choices = char_data_cols, # Use formatted choices directly
-                     multiple = FALSE, # Only one ID variable allowed for GEE
-                     options = list(placeholder = "Select one ID variable",
-                     render = I('{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }')
-                   ))
-    },
-
-    if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
-      selectizeInput("groupVar", "Grouping Variable:",
-                     choices = char_data_cols, # Use formatted choices directly
-                   options = list(render = I(
-                     '{
-                       item: function(item, escape) { 
-                         return "<div>" + escape(item.label) + "</div>"; 
-                       }
-                     }'
-                   )))
-    },
-
-    if (input$analysisType == "logistic") {
-      selectizeInput("logisticFamily", "Family for Logistic Regression:",
-                   choices = c("binomial", "quasibinomial"),
-                   selected = "binomial")
-    },
-
-    if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectInput("glmmFamily", "Family for GLMM/GEE:", # Changed to selectInput as it's simpler and doesn't needs dynamic search
-                   choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
-                   selected = "poisson")
-    },
-
-    if (input$analysisType == "chisq") {
-      tagList(
-        selectizeInput("chisqVar", "Variable for Chi-squared Test:",
-                        choices = all_data_cols, # Use formatted choices directly
-                      options = list(render = I(
-                        '{
-                          item: function(item, escape) { 
-                            return "<div>" + escape(item.label) + "</div>"; 
-                          }
-                        }'
-                      ))),
-        textInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
-                  value = "",
-                  placeholder = "e.g., 0.25, 0.75"),
-        helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
-      )
-    },
-
-      if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
-      tagList(
-        selectizeInput("var1", "Variable 1:",
-                     choices = all_data_cols,
-                     options = list(render = I(
-                       '{
-                         item: function(item, escape) { 
-                           return "<div>" + escape(item.label) + "</div>"; 
-                         }
-                       }'
-                     ))),
-        selectizeInput("var2", "Variable 2:",
-                     choices = all_data_cols,
+    tagList(
+      tags$head(tags$style(HTML(css_rules))),
+      # Common parameters for most analyses
+      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
+                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = num_data_cols,
                      options = list(render = I(
                        '{
                          item: function(item, escape) { 
@@ -1165,14 +1362,104 @@ output$analysisParams <- renderUI({
                          }
                        }'
                      )))
-      )
-    },
+      },
+
+      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
+        selectizeInput("predictorVars", "Predictor Variables:",
+                     choices = num_data_cols,
+                     multiple = TRUE,
+                     options = list(
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+
+      if (input$analysisType %in% c("glmm", "gamm")) {
+        selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
+                       choices = char_data_cols,
+                       multiple = TRUE,
+                       options = list(create = TRUE, placeholder = "Type or select for random effects",
+                       render = I('{
+                         item: function(item, escape) { 
+                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
+                         }
+                       }')
+                     ))
+      },
+
+      if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
+        selectizeInput("groupVar", "Grouping Variable:",
+                     choices = char_data_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      },
+
+      if (input$analysisType == "logistic") {
+        selectizeInput("logisticFamily", "Family for Logistic Regression:",
+                     choices = c("binomial", "quasibinomial"),
+                     selected = "binomial")
+      },
+
+      if (input$analysisType == "glmm" || input$analysisType == "gee") {
+        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
+                     selected = "poisson")
+      },
+
+      if (input$analysisType == "chisq") {
+        tagList(
+          selectizeInput("chisqVar", "Variable for Chi-squared Test:",
+                        choices = all_data_cols,
+                        options = list(render = I(
+                          '{
+                            item: function(item, escape) { 
+                              return "<div>" + escape(item.label) + "</div>"; 
+                            }
+                          }'
+                        ))),
+          textInput("expectedProbs", "Expected Probabilities (comma-separated, optional):",
+                    value = "",
+                    placeholder = "e.g., 0.25, 0.75"),
+          helpText("Leave empty for uniform distribution, or provide probabilities matching levels.")
+        )
+      },
+
+      if (input$analysisType %in% c("spearman", "pearson")) { # Pearson added as a common correlation
+        tagList(
+          selectizeInput("var1", "Variable 1:",
+                       choices = all_data_cols,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       ))),
+          selectizeInput("var2", "Variable 2:",
+                       choices = all_data_cols,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       )))
+        )
+      },
       # Add more specific parameters as needed for other models
-    if (input$analysisType == "permtest") {
-      helpText("Permutation signed rank test requires a specific implementation (e.g., from 'coin' package).")
-    }
-  )
-})
+      if (input$analysisType == "permtest") {
+        helpText("Permutation signed rank test requires a specific implementation (e.g., from 'coin' package).")
+      }
+    )
+  })
 
 
   # Run analysis when the run button is clicked
@@ -1228,6 +1515,9 @@ observeEvent(input$runAnalysis, {
     if (!is.null(model_result)) {
       analysis_results$result <- model_result$summary
       analysis_results$plot <- model_result$plot
+      
+      # Switch to results tab after successful analysis
+      updateTabsetPanel(session, "mainTabs", selected = "Analysis Results")
     } else {
       stop("Unsupported analysis type or missing parameters")
     }
