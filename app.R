@@ -501,11 +501,92 @@ run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL)
   )
 }
 
+# GAMM Analysis
+run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = NULL, linear_terms = NULL, family = "gaussian") {
+  tryCatch({
+    # Convert family to function if it's a string
+    if (is.character(family)) {
+      family <- get(family, mode = "function", envir = parent.frame())
+    }
+    
+    # Create formula for smooth terms (non-linear predictors)
+    smooth_terms <- if (!is.null(predictor_vars)) {
+      paste0("s(", predictor_vars, ")", collapse = " + ")
+    } else {
+      ""
+    }
+    
+    # Add linear terms if specified
+    if (!is.null(linear_terms) && length(linear_terms) > 0) {
+      linear_terms_str <- paste(linear_terms, collapse = " + ")
+      if (nzchar(smooth_terms)) {
+        smooth_terms <- paste(smooth_terms, linear_terms_str, sep = " + ")
+      } else {
+        smooth_terms <- linear_terms_str
+      }
+    }
+    
+    # Create the formula
+    formula_str <- if (nzchar(smooth_terms)) {
+      paste(response_var, "~", smooth_terms)
+    } else {
+      paste(response_var, "~ 1")  # Intercept-only model if no predictors
+    }
+    
+    # Remove any double plusses from the formula
+    formula_str <- gsub("\\+\\s*\\+", "+", formula_str)
+    
+    # Prepare random effects if specified
+    random_effect_list <- NULL
+    if (!is.null(random_effect) && length(random_effect) > 0) {
+      # Create a named list with the random effect formula
+      random_effect_list <- list(as.formula(paste0("~ 1 | ", random_effect[1])))
+      names(random_effect_list) <- random_effect[1]
+    }
+    
+    # Create the model call
+    if (!is.null(random_effect_list)) {
+      # If we have random effects, use gamm with the random parameter
+      model <- gamm(
+        as.formula(formula_str),
+        random = random_effect_list,
+        family = family,
+        data = df,
+        method = "REML"
+      )
+    } else {
+      # If no random effects, just use gam for better performance
+      model <- list(
+        gam = mgcv::gam(
+          as.formula(formula_str),
+          family = family,
+          data = df,
+          method = "REML"
+        ),
+        lme = NULL
+      )
+    }
+    
+    # Return summary and plot function
+    list(
+      summary = summary(model$gam),
+      plot = function() {
+        par(mfrow = c(2, 2))
+        plot(model$gam, pages = 1, residuals = TRUE, pch = 1, cex = 1, seWithMean = TRUE)
+        par(mfrow = c(1, 1))
+      }
+    )
+  }, error = function(e) {
+    stop(paste("Error in GAMM analysis:", e$message))
+  })
+}
 
 
+##################################################################
 
-#######################################################################
+######################     UI Definition           ##################
 
+##################################################################
 
 
 # UI definition with custom CSS
@@ -1801,6 +1882,17 @@ observeEvent(input$runAnalysis, {
               abline(h = 0, lty = 2)
             }
           }
+        )
+      },
+      "gamm" = {
+        # Run GAMM analysis
+        run_gamm_analysis(
+          df = df,
+          response_var = input$responseVar,
+          predictor_vars = input$predictorVars,
+          random_effect = input$randomEffect,
+          linear_terms = input$linearTerms,
+          family = input$gammFamily
         )
       },
       # Add other analysis types here
