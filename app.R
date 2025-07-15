@@ -1147,6 +1147,10 @@ server <- function(input, output, session) {
         } else {
           stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
         }
+
+        # Append coordinates
+        py_df <- r_to_py(df)
+        df <- data_utils$append_coord(py_df)
         
         # Clean and convert column types
         df <- clean_and_convert(df)
