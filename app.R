@@ -314,8 +314,146 @@ run_anova_analysis <- function(df, response_var, group_var) {
     }
   )
 }
+# Chi-squared test
+run_chisq_analysis <- function(df, response_var, group_var) {
+  tbl <- table(df[[response_var]], df[[group_var]])
+  test <- chisq.test(tbl)
+  list(
+    summary = test,
+    plot = function() {
+      barplot(tbl, beside = TRUE, legend = TRUE,
+              main = "Contingency Table",
+              xlab = group_var, ylab = "Count")
+    }
+  )
+}
 
+# Mann-Whitney U test (Wilcoxon rank sum test)
+run_mannwhitney_analysis <- function(df, response_var, group_var) {
+  x <- df[[response_var]][df[[group_var]] == unique(df[[group_var]])[1]]
+  y <- df[[response_var]][df[[group_var]] == unique(df[[group_var]])[2]]
+  test <- wilcox.test(x, y)
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(df[[response_var]] ~ df[[group_var]],
+              main = "Mann-Whitney U Test",
+              xlab = group_var, ylab = response_var)
+    }
+  )
+}
+# Kruskal-Wallis test
+run_kruskal_analysis <- function(df, response_var, group_var) {
+  test <- kruskal.test(df[[response_var]] ~ df[[group_var]])
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(df[[response_var]] ~ df[[group_var]],
+              main = "Kruskal-Wallis Test",
+              xlab = group_var, ylab = response_var)
+    }
+  )
+}
 
+# Hurdle model using pscl::hurdle
+run_hurdle_analysis <- function(df, response_var, predictor_vars) {
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  model <- pscl::hurdle(as.formula(formula_str), data = df)
+  list(
+    summary = summary(model),
+    plot = function() {
+      plot(model, main = "Hurdle Model Diagnostics")
+    }
+  )
+}
+
+# Sign test (paired data)
+run_signtest_analysis <- function(df, response_var, group_var) {
+  library(BSDA)
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Sign test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  n <- min(length(x), length(y))
+  test <- BSDA::SIGN.test(x[1:n], y[1:n])
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(x[1:n], y[1:n], names = levels,
+              main = "Sign Test",
+              ylab = response_var)
+    }
+  )
+}
+
+# Wilcoxon signed-rank test (paired)
+run_wilcoxon_analysis <- function(df, response_var, group_var) {
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Wilcoxon signed-rank test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  n <- min(length(x), length(y))
+  test <- wilcox.test(x[1:n], y[1:n], paired = TRUE)
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(x[1:n], y[1:n], names = levels,
+              main = "Wilcoxon Signed-Rank Test",
+              ylab = response_var)
+    }
+  )
+}
+
+# Spearman's rank correlation
+run_spearman_analysis <- function(df, response_var, predictor_var) {
+  test <- cor.test(df[[response_var]], df[[predictor_var]], method = "spearman")
+  list(
+    summary = test,
+    plot = function() {
+      plot(df[[predictor_var]], df[[response_var]],
+           main = "Spearman Correlation",
+           xlab = predictor_var, ylab = response_var)
+      abline(lm(df[[response_var]] ~ df[[predictor_var]]), col = "blue")
+    }
+  )
+}
+
+# Permutation test for difference in means (simple version)
+run_permtest_analysis <- function(df, response_var, group_var) {
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Permutation test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  obs_diff <- mean(x, na.rm = TRUE) - mean(y, na.rm = TRUE)
+  n_perm <- 1000
+  perm_diffs <- replicate(n_perm, {
+    perm <- sample(c(x, y))
+    mean(perm[1:length(x)], na.rm = TRUE) - mean(perm[(length(x)+1):(length(x)+length(y))], na.rm = TRUE)
+  })
+  p_value <- mean(abs(perm_diffs) >= abs(obs_diff))
+  result <- list(
+    statistic = obs_diff,
+    p.value = p_value,
+    method = "Permutation test for difference in means",
+    alternative = "two.sided"
+  )
+  class(result) <- "htest"
+  list(
+    summary = result,
+    plot = function() {
+      hist(perm_diffs, breaks = 30, main = "Permutation Test Null Distribution",
+           xlab = "Difference in Means")
+      abline(v = obs_diff, col = "red", lwd = 2)
+      legend("topright", legend = "Observed diff", col = "red", lwd = 2)
+    }
+  )
+}
 
 # GLMM Analysis
 run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
@@ -797,17 +935,16 @@ ui <- fluidPage(
                           "Negative Binomial Regression" = "negbin"
                         ),
                         "Non-parametric" = list(
-                          #Uncomment these as they are implemented
                           "GWR (Geographically Weighted Regression)" = "gwr",
-                          # "Goodness of Fit, Chi-squared test" = "chisq",
-                          # "Mann-Whitney U test" = "mannwhitney",
-                          # "Kruskal-Wallis test" = "kruskal",
+                          "Goodness of Fit, Chi-squared test" = "chisq",
+                          "Mann-Whitney U test" = "mannwhitney",
+                          "Kruskal-Wallis test" = "kruskal",
                           "Zero Inflated Model" = "zeroinfl",
-                          # "Hurdle Model" = "hurdle",
-                          # "Sign test" = "signtest",
-                          # "Wilcoxon Signed-Rank test" = "wilcoxon",
-                          # "Spearman's Rank Correlation" = "spearman",
-                          # "Permutation signed rank test" = "permtest"
+                          "Hurdle Model" = "hurdle",
+                          "Sign test" = "signtest",
+                          "Wilcoxon Signed-Rank test" = "wilcoxon",
+                          "Spearman's Rank Correlation" = "spearman",
+                          "Permutation signed rank test" = "permtest"
                         )
                       ),
                       selected = ""
@@ -1594,6 +1731,46 @@ observeEvent(input$runAnalysis, {
         input$predictorVars,
         input$clusterID,
         input$glmmFamily
+      ),
+      "chisq" = run_chisq_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "mannwhitney" = run_mannwhitney_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "kruskal" = run_kruskal_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "hurdle" = run_hurdle_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars
+      ),
+      "signtest" = run_signtest_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "wilcoxon" = run_wilcoxon_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "spearman" = run_spearman_analysis(
+        df,
+        input$var1,
+        input$var2
+      ),
+      "permtest" = run_permtest_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
       ),
       "gwr" = {
         req(input$responseVar, input$predictorVars)
