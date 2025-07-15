@@ -259,35 +259,38 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
     # Create summary and plot
     model_summary <- summary(model)
     
-    # Create a plot of predicted probabilities vs. predictor variable
-    if (length(predictor_vars) > 0) {
-      predictor_to_plot <- predictor_vars[1]
-      plot_data <- data.frame(
-        x = df[[predictor_to_plot]],
-        y = df[[response_var]],
-        predicted = predict(model, type = "response")
-      )
-      
-      # Create ggplot
-      p <- ggplot(plot_data, aes(x = x)) +
-        geom_point(aes(y = y), color = "red", size = 2) +
-        geom_line(aes(y = predicted), color = "blue", size = 1) +
-        labs(
-          x = predictor_to_plot,
-          y = "Predicted Probability",
-          title = "Logistic Regression: Predicted Probabilities"
-        ) +
-        theme_minimal()
-    } else {
-      p <- ggplot() +
-        labs(
-          title = "No plot available for this configuration"
+    # Create plot function that will be called by Shiny
+    plot_func <- function() {
+      if (length(predictor_vars) > 0) {
+        predictor_to_plot <- predictor_vars[1]
+        plot_data <- data.frame(
+          x = df[[predictor_to_plot]],
+          y = df[[response_var]],
+          predicted = predict(model, type = "response")
         )
+        
+        # Create base R plot
+        plot(
+          plot_data$x,
+          plot_data$predicted,
+          type = "l",
+          col = "blue",
+          lwd = 2,
+          xlab = predictor_to_plot,
+          ylab = "Predicted Probability",
+          main = "Logistic Regression: Predicted Probabilities"
+        )
+        points(plot_data$x, plot_data$y, col = "red", pch = 16)
+      } else {
+        plot(1, 1, type = "n", 
+             main = "No plot available for this configuration",
+             xlab = "", ylab = "")
+      }
     }
     
     list(
       summary = model_summary,
-      plot = p
+      plot = plot_func
     )
   }, error = function(e) {
     showNotification(paste("Error running logistic regression:", e$message), type = "error")
