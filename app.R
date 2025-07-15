@@ -12,6 +12,7 @@ library(spgwr) # For GWR
 library(readr)
 library(readxl)
 library(ggplot2)
+library(BSDA)
 
 
 # in R studio, write and run a file with the following code:
@@ -139,10 +140,6 @@ read_data_file <- function(file_path, file_name) {
   return(df)
 }
 
-
-
-
-
 # Linear Regression Analysis
 run_linear_analysis <- function(df, response_var, predictor_vars) {
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
@@ -165,32 +162,6 @@ run_linear_analysis <- function(df, response_var, predictor_vars) {
     }
   )
 }
-
-
-
-# # Logistic Regression Analysis
-# run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
-#   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
-#   model <- glm(as.formula(formula_str), family = family, data = df)
-  
-#   list(
-#     summary = summary(model),
-#     plot = function() {
-#       if (length(predictor_vars) > 0) {
-#         predictor_to_plot <- predictor_vars[1]
-#         plot(df[[predictor_to_plot]], predict(model, type = "response"),
-#              xlab = predictor_to_plot, 
-#              ylab = "Predicted Probability",
-#              main = "Logistic Regression: Predicted Probabilities")
-#         points(df[[predictor_to_plot]], df[[response_var]], 
-#                col = "red", pch = 16)
-#       } else {
-#         plot(1, 1, type = "n", 
-#              main = "No plot available for this configuration")
-#       }
-#     }
-#   )
-# }
 
 # Function to identify and categorize suitable logistic response variables
 is_logistic_response <- function(df, col_name) {
@@ -242,7 +213,7 @@ convert_to_binary <- function(df, col_name) {
   return(df)
 }
 
-# Add this function before the analysis dispatch in the server section
+#Logistic Regression Analysis
 run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
   # Convert convertible variables before analysis
   var_type <- is_logistic_response(df, response_var)
