@@ -168,29 +168,29 @@ run_linear_analysis <- function(df, response_var, predictor_vars) {
 
 
 
-# Logistic Regression Analysis
-run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
-  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
-  model <- glm(as.formula(formula_str), family = family, data = df)
+# # Logistic Regression Analysis
+# run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
+#   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+#   model <- glm(as.formula(formula_str), family = family, data = df)
   
-  list(
-    summary = summary(model),
-    plot = function() {
-      if (length(predictor_vars) > 0) {
-        predictor_to_plot <- predictor_vars[1]
-        plot(df[[predictor_to_plot]], predict(model, type = "response"),
-             xlab = predictor_to_plot, 
-             ylab = "Predicted Probability",
-             main = "Logistic Regression: Predicted Probabilities")
-        points(df[[predictor_to_plot]], df[[response_var]], 
-               col = "red", pch = 16)
-      } else {
-        plot(1, 1, type = "n", 
-             main = "No plot available for this configuration")
-      }
-    }
-  )
-}
+#   list(
+#     summary = summary(model),
+#     plot = function() {
+#       if (length(predictor_vars) > 0) {
+#         predictor_to_plot <- predictor_vars[1]
+#         plot(df[[predictor_to_plot]], predict(model, type = "response"),
+#              xlab = predictor_to_plot, 
+#              ylab = "Predicted Probability",
+#              main = "Logistic Regression: Predicted Probabilities")
+#         points(df[[predictor_to_plot]], df[[response_var]], 
+#                col = "red", pch = 16)
+#       } else {
+#         plot(1, 1, type = "n", 
+#              main = "No plot available for this configuration")
+#       }
+#     }
+#   )
+# }
 
 # Function to identify and categorize suitable logistic response variables
 is_logistic_response <- function(df, col_name) {
@@ -218,7 +218,8 @@ is_logistic_response <- function(df, col_name) {
     
     # Check if column has only non-zero values of same sign
     non_zero <- col[col != 0]
-    if (length(non_zero) > 0) {
+    zero <- col[col == 0]
+    if (length(non_zero) > 0 && length(zero) > 0) {
       # Check if all non-zero values are positive or all negative
       if (all(non_zero > 0) || all(non_zero < 0)) {
         return("convertible")
@@ -1338,12 +1339,13 @@ prepare_response_variable <- function(df, var_name) {
     all_data_cols <- format_vars(names(df))
     num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
     char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
+    logistic_cols <- format_vars(names(df)[sapply(names(df), function(col) is_logistic_response(df, col) != "unsuitable")])
 
     # Include the CSS in the UI
     tagList(
       tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
+      if (input$analysisType %in% c("linear", "glmm", "gamm", "negbin", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
         selectizeInput("responseVar", "Response Variable:",
                      choices = num_data_cols,
@@ -1356,9 +1358,21 @@ prepare_response_variable <- function(df, var_name) {
                      )))
       },
 
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
+      if (input$analysisType == "logistic") {
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = logistic_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      },
+
+      if (input$analysisType %in% c("linear","logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
         selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols,
+                     choices = all_data_cols,
                      multiple = TRUE,
                      options = list(
                        render = I('{
