@@ -318,42 +318,79 @@ run_anova_analysis <- function(df, response_var, group_var) {
 
 
 # GLMM Analysis
-run_gee_analysis <- function(df, response_var, predictor_vars, cluster_id, family = "poisson") {
-  formula_str <- paste0(response_var, " ~ ", paste(predictor_vars, collapse = " + "))
+run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
+  formula_str <- paste0(response_var, " ~ ", 
+                       paste(predictor_vars, collapse = " + "), 
+                       " + (1|", random_effect, ")")
   
-  # For Poisson family, convert response variable to integer if needed
-  if (family == "poisson") {
-    df[[response_var]] <- as.integer(round(df[[response_var]]))
-  }
-  
-  # Create GEE model using geepack
-  gee_model <- geepack::geeglm(
-    as.formula(formula_str),
-    family = family,
-    data = df,
-    id = as.factor(df[[cluster_id]]),  # Ensure cluster ID is treated as factor
-    corstr = "exchangeable"
-  )
+  model <- lme4::glmer(as.formula(formula_str), 
+                      family = family, 
+                      data = df)
   
   list(
-    summary = summary(gee_model),
+    summary = summary(model),
     plot = function() {
-      # Get fitted values and residuals
-      fitted <- fitted(gee_model)
-      residuals <- residuals(gee_model)
-      
-      # Create plot
-      plot(fitted, residuals,
-           xlab = "Fitted values",
-           ylab = "Residuals",
-           main = "GEE Residuals vs. Fitted",
-           pch = 16, col = "blue")
-      abline(h = 0, lty = 2)
+      plot(model, main = "GLMM Residuals vs. Fitted")
     }
   )
 }
 
-
+run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL) {
+  # Check for coordinates column
+  if (!"coordinates" %in% names(df)) {
+    stop("Data must contain a 'coordinates' column with spatial coordinates.")
+  }
+  
+  # Extract coordinates (assume list-column or character "lat,lon")
+  coords <- df$coordinates
+  if (is.list(coords)) {
+    coords_mat <- do.call(rbind, coords)
+  } else if (is.character(coords)) {
+    coords_mat <- do.call(rbind, strsplit(coords, ","))
+    coords_mat <- apply(coords_mat, 2, as.numeric)
+  } else if (is.matrix(coords) || is.data.frame(coords)) {
+    coords_mat <- as.matrix(coords)
+  } else {
+    stop("Unrecognized format for 'coordinates' column.")
+  }
+  if (ncol(coords_mat) != 2) stop("Coordinates must have two columns (lat, lon).")
+  colnames(coords_mat) <- c("lat", "lon")
+  
+  # Prepare formula
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  gwr_formula <- as.formula(formula_str)
+  
+  # Set bandwidth if not provided
+  if (is.null(bandwidth)) {
+    bandwidth <- spgwr::gwr.sel(gwr_formula, data = df, coords = coords_mat)
+  }
+  
+  # Run GWR
+  gwr_result <- spgwr::gwr(
+    gwr_formula,
+    data = df,
+    coords = coords_mat,
+    bandwidth = bandwidth,
+    hatmatrix = TRUE,
+    se.fit = TRUE
+  )
+  
+  list(
+    summary = gwr_result$SDF,
+    plot = function() {
+      # Plot the spatial distribution of the fitted values
+      plot(
+        coords_mat,
+        col = heat.colors(100)[cut(gwr_result$SDF$pred, 100)],
+        pch = 19,
+        xlab = "Longitude",
+        ylab = "Latitude",
+        main = "GWR Fitted Values"
+      )
+      legend("topright", legend = "Fitted", pch = 19, col = "red")
+    }
+  )
+}
 
 
 
@@ -1368,7 +1405,7 @@ prepare_response_variable <- function(df, var_name) {
       tags$head(tags$style(HTML(css_rules))),
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "glmm", "gamm", "negbin", "anova", "kruskal",
-                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
+                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney", "gwr")) {
         selectizeInput("responseVar", "Response Variable:",
                      choices = num_data_cols,
                      options = list(render = I(
@@ -1392,7 +1429,7 @@ prepare_response_variable <- function(df, var_name) {
                      )))
       },
 
-      if (input$analysisType %in% c("linear","logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
+      if (input$analysisType %in% c("linear","logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle", "gwr")) {
         selectizeInput("predictorVars", "Predictor Variables:",
                      choices = all_data_cols,
                      multiple = TRUE,
@@ -1442,21 +1479,6 @@ prepare_response_variable <- function(df, var_name) {
         selectizeInput("glmmFamily", "Family for GLMM/GEE:",
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
-      },
-
-      if (input$analysisType == "gee") {
-        # Get categorical variables for cluster ID
-        categorical_vars <- format_vars(names(df)[sapply(df, function(x) is.factor(x) || is.character(x))])
-        
-        selectizeInput("clusterID", "Cluster/Group ID:",
-                       choices = categorical_vars,
-                       options = list(render = I(
-                         '{
-                           item: function(item, escape) { 
-                             return "<div>" + escape(item.label) + "</div>"; 
-                           }
-                         }'
-                       )))
       },
 
       if (input$analysisType == "chisq") {
@@ -1524,37 +1546,49 @@ observeEvent(input$runAnalysis, {
     # Dispatch to the appropriate analysis function
     model_result <- switch(
       input$analysisType,
-      "linear" = run_linear_analysis(
-        df, 
-        input$responseVar, 
-        input$predictorVars
-      ),
-      "logistic" = run_logistic_analysis(
-        df, 
-        input$responseVar, 
-        input$predictorVars,
-        input$logisticFamily
-      ),
-      "anova" = run_anova_analysis(
-        df,
-        input$responseVar,
-        input$groupVar
-      ),
-      "glmm" = run_glmm_analysis(
-        df,
-        input$responseVar,
-        input$predictorVars,
-        input$randomEffect,
-        input$glmmFamily
-      ),
-      "gee" = run_gee_analysis(
-        df,
-        input$responseVar,
-        input$predictorVars,
-        input$clusterID,
-        input$glmmFamily
-      ),
-      # Add other analysis types here
+      "linear" = {
+        req(input$responseVar, input$predictorVars)
+        run_linear_analysis(
+          df, 
+          input$responseVar, 
+          input$predictorVars
+        )
+      },
+      "logistic" = {
+        req(input$responseVar, input$predictorVars, input$logisticFamily)
+        run_logistic_analysis(
+          df, 
+          input$responseVar, 
+          input$predictorVars,
+          input$logisticFamily
+        )
+      },
+      "anova" = {
+        req(input$responseVar, input$groupVar)
+        run_anova_analysis(
+          df,
+          input$responseVar,
+          input$groupVar
+        )
+      },
+      "glmm" = {
+        req(input$responseVar, input$predictorVars, input$randomEffect, input$glmmFamily)
+        run_glmm_analysis(
+          df,
+          input$responseVar,
+          input$predictorVars,
+          input$randomEffect,
+          input$glmmFamily
+        )
+      },
+      "gwr" = {
+        req(input$responseVar, input$predictorVars)
+        run_gwr_analysis(
+          df,
+          input$responseVar,
+          input$predictorVars
+        )
+      },
       NULL
     )
     
@@ -1566,7 +1600,7 @@ observeEvent(input$runAnalysis, {
       # Switch to results tab after successful analysis
       updateTabsetPanel(session, "mainTabs", selected = "Analysis Results")
     } else {
-      stop("Unsupported analysis type or missing parameters")
+      stop("Unsupported analysis type or missing parameters. Please ensure you have selected all required variables for the chosen analysis type.")
     }
     
   }, error = function(e) {
