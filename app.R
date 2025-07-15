@@ -124,19 +124,19 @@ tryCatch({
 # Function to read and clean data (Can be expanded for more than logistic regression)
 read_data_file <- function(file_path, file_name) {
   # ... existing code ...
-  
+
   # After loading and cleaning data
   df <- clean_and_convert(df)
-  
+
   # Identify suitable logistic response variables
   suitable_logistic_vars <- sapply(names(df), function(col) {
     is_logistic_response(df, col)
   })
-  
+
   # Store suitable variables in reactive value
   suitable_response_vars <- reactiveVal()
   suitable_response_vars(names(df)[suitable_logistic_vars])
-  
+
   return(df)
 }
 
@@ -144,13 +144,13 @@ read_data_file <- function(file_path, file_name) {
 run_linear_analysis <- function(df, response_var, predictor_vars) {
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
   model <- lm(as.formula(formula_str), data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
       if (length(predictor_vars) == 1) {
         plot(df[[predictor_vars[1]]], df[[response_var]],
-             xlab = predictor_vars[1], 
+             xlab = predictor_vars[1],
              ylab = response_var,
              main = paste("Linear Regression:", response_var, "vs", predictor_vars[1]))
         abline(model, col = "blue", lwd = 2)
@@ -220,17 +220,17 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
   if (var_type == "convertible") {
     df <- convert_to_binary(df, response_var)
   }
-  
+
   # Prepare formula
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
-  
+
   # Run logistic regression with proper error handling
   tryCatch({
     model <- glm(as.formula(formula_str), family = family, data = df)
-    
+
     # Create summary and plot
     model_summary <- summary(model)
-    
+
     # Create plot function that will be called by Shiny
     plot_func <- function() {
       if (length(predictor_vars) > 0) {
@@ -240,7 +240,7 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
           y = df[[response_var]],
           predicted = predict(model, type = "response")
         )
-        
+
         # Create base R plot
         plot(
           plot_data$x,
@@ -254,12 +254,12 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
         )
         points(plot_data$x, plot_data$y, col = "red", pch = 16)
       } else {
-        plot(1, 1, type = "n", 
+        plot(1, 1, type = "n",
              main = "No plot available for this configuration",
              xlab = "", ylab = "")
       }
     }
-    
+
     list(
       summary = model_summary,
       plot = plot_func
@@ -274,13 +274,13 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
 run_anova_analysis <- function(df, response_var, group_var) {
   formula_str <- paste(response_var, "~", group_var)
   model <- aov(as.formula(formula_str), data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
       boxplot(as.formula(formula_str), data = df,
               main = paste("ANOVA: ", response_var, " by ", group_var),
-              xlab = group_var, 
+              xlab = group_var,
               ylab = response_var)
     }
   )
@@ -428,14 +428,14 @@ run_permtest_analysis <- function(df, response_var, group_var) {
 
 # GLMM Analysis
 run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
-  formula_str <- paste0(response_var, " ~ ", 
-                       paste(predictor_vars, collapse = " + "), 
+  formula_str <- paste0(response_var, " ~ ",
+                       paste(predictor_vars, collapse = " + "),
                        " + (1|", random_effect, ")")
-  
-  model <- lme4::glmer(as.formula(formula_str), 
-                      family = family, 
+
+  model <- lme4::glmer(as.formula(formula_str),
+                      family = family,
                       data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
@@ -449,7 +449,7 @@ run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL)
   if (!"coordinates" %in% names(df)) {
     stop("Data must contain a 'coordinates' column with spatial coordinates.")
   }
-  
+
   # Extract coordinates (assume list-column or character "lat,lon")
   coords <- df$coordinates
   if (is.list(coords)) {
@@ -464,16 +464,16 @@ run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL)
   }
   if (ncol(coords_mat) != 2) stop("Coordinates must have two columns (lat, lon).")
   colnames(coords_mat) <- c("lat", "lon")
-  
+
   # Prepare formula
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
   gwr_formula <- as.formula(formula_str)
-  
+
   # Set bandwidth if not provided
   if (is.null(bandwidth)) {
     bandwidth <- spgwr::gwr.sel(gwr_formula, data = df, coords = coords_mat)
   }
-  
+
   # Run GWR
   gwr_result <- spgwr::gwr(
     gwr_formula,
@@ -483,7 +483,7 @@ run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL)
     hatmatrix = TRUE,
     se.fit = TRUE
   )
-  
+
   list(
     summary = gwr_result$SDF,
     plot = function() {
@@ -508,14 +508,14 @@ run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = 
     if (is.character(family)) {
       family <- get(family, mode = "function", envir = parent.frame())
     }
-    
+
     # Create formula for smooth terms (non-linear predictors)
     smooth_terms <- if (!is.null(predictor_vars)) {
       paste0("s(", predictor_vars, ")", collapse = " + ")
     } else {
       ""
     }
-    
+
     # Add linear terms if specified
     if (!is.null(linear_terms) && length(linear_terms) > 0) {
       linear_terms_str <- paste(linear_terms, collapse = " + ")
@@ -525,17 +525,17 @@ run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = 
         smooth_terms <- linear_terms_str
       }
     }
-    
+
     # Create the formula
     formula_str <- if (nzchar(smooth_terms)) {
       paste(response_var, "~", smooth_terms)
     } else {
       paste(response_var, "~ 1")  # Intercept-only model if no predictors
     }
-    
+
     # Remove any double plusses from the formula
     formula_str <- gsub("\\+\\s*\\+", "+", formula_str)
-    
+
     # Prepare random effects if specified
     random_effect_list <- NULL
     if (!is.null(random_effect) && length(random_effect) > 0) {
@@ -543,7 +543,7 @@ run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = 
       random_effect_list <- list(as.formula(paste0("~ 1 | ", random_effect[1])))
       names(random_effect_list) <- random_effect[1]
     }
-    
+
     # Create the model call
     if (!is.null(random_effect_list)) {
       # If we have random effects, use gamm with the random parameter
@@ -566,7 +566,7 @@ run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = 
         lme = NULL
       )
     }
-    
+
     # Return summary and plot function
     list(
       summary = summary(model$gam),
@@ -696,21 +696,35 @@ ui <- fluidPage(
         tags$div(id = "sammyModal", class = "modal",
           tags$div(class = "modal-content",
             tags$span(class = "close", "×"),
-            h3("Sammy Olsen"),
-            p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: spamolsen")
+            div(style = "display: flex; flex-direction: column; align-items: center; gap: 20px;",
+              img(src = "sammy_bio_image.jpg", 
+                  style = "width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #3498db;",
+                  alt = "Sammy Olsen"),
+              div(style = "text-align: center;",
+                h3("Sammy Olsen"),
+                p("Data Scientist and co-creator of Massasoit Model Forge."),
+                p(HTML("<a href='https://github.com/spamolsen' target='_blank'>GitHub: spamolsen</a>"))
+              )
+            )
           )
         ),
-        
+
         tags$div(id = "ianModal", class = "modal",
           tags$div(class = "modal-content",
             tags$span(class = "close", "×"),
-            h3("Ian Handy"),
-            p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: vyndyctyv")
+            div(style = "display: flex; flex-direction: column; align-items: center; gap: 20px;",
+              img(src = "ian_bio_placeholder.png", 
+                  style = "width: 200px; height: 200px; border-radius: 50%; object-fit: cover; object-position: center 20%; border: 4px solid #3498db;",
+                  alt = "Ian Handy"),
+              div(style = "text-align: center;",
+                h3("Ian Handy"),
+                p("Data Scientist and co-creator of Massasoit Model Forge."),
+                p(HTML("<a href='https://github.com/ian-handy' target='_blank'>GitHub: ian-handy</a>"))
+              )
+            )
           )
         ),
-        
+
         # JavaScript for modals
         tags$script(HTML(
           "// Get the modals
@@ -827,7 +841,7 @@ ui <- fluidPage(
         p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
           tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
-          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
+          tags$li(tags$a(href = "https://github.com/ian-handy", target = "_blank", "GitHub: ian-handy"))
         )
       )
     )
