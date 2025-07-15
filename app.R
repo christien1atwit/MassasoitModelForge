@@ -166,27 +166,27 @@ run_linear_analysis <- function(df, response_var, predictor_vars) {
 # Function to identify and categorize suitable logistic response variables
 is_logistic_response <- function(df, col_name) {
   col <- df[[col_name]]
-  
+
   # Check if column is numeric or logical
   if (!is.numeric(col) && !is.logical(col)) {
     return("unsuitable")
   }
-  
+
   # For numeric columns
   if (is.numeric(col)) {
     # Remove NA values for checking
     col <- na.omit(col)
-    
+
     # Check if all values are either 0 or 1
     if (all(col %in% c(0, 1))) {
       return("binary")
     }
-    
+
     # Check if all values are proportions (0 <= x <= 1)
     if (all(col >= 0 & col <= 1)) {
       return("proportion")
     }
-    
+
     # Check if column has only non-zero values of same sign
     non_zero <- col[col != 0]
     zero <- col[col == 0]
@@ -196,10 +196,10 @@ is_logistic_response <- function(df, col_name) {
         return("convertible")
       }
     }
-    
+
     return("unsuitable")
   }
-  
+
   # For logical columns, they're automatically suitable
   return("binary")
 }
@@ -207,7 +207,7 @@ is_logistic_response <- function(df, col_name) {
 # Function to convert convertible variables to binary
 convert_to_binary <- function(df, col_name) {
   col <- df[[col_name]]
-  
+
   # Convert non-zero values to 1, keep zeros as 0
   df[[col_name]] <- ifelse(col != 0, 1, 0)
   return(df)
