@@ -1461,16 +1461,17 @@ prepare_response_variable <- function(df, var_name) {
       },
 
       if (input$analysisType %in% c("glmm", "gamm")) {
-        selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
+        selectizeInput("randomEffect", "Random Effects:",
                        choices = char_data_cols,
                        multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects",
-                       render = I('{
-                         item: function(item, escape) { 
-                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
-                         }
-                       }')
-                     ))
+                       options = list(
+                         render = I('{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'),
+                         delimiter = "+"
+                       ))
       },
 
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
