@@ -797,16 +797,17 @@ ui <- fluidPage(
                           "Negative Binomial Regression" = "negbin"
                         ),
                         "Non-parametric" = list(
+                          #Uncomment these as they are implemented
                           "GWR (Geographically Weighted Regression)" = "gwr",
-                          "Goodness of Fit, Chi-squared test" = "chisq",
-                          "Mann-Whitney U test" = "mannwhitney",
-                          "Kruskal-Wallis test" = "kruskal",
+                          # "Goodness of Fit, Chi-squared test" = "chisq",
+                          # "Mann-Whitney U test" = "mannwhitney",
+                          # "Kruskal-Wallis test" = "kruskal",
                           "Zero Inflated Model" = "zeroinfl",
-                          "Hurdle Model" = "hurdle",
-                          "Sign test" = "signtest",
-                          "Wilcoxon Signed-Rank test" = "wilcoxon",
-                          "Spearman's Rank Correlation" = "spearman",
-                          "Permutation signed rank test" = "permtest"
+                          # "Hurdle Model" = "hurdle",
+                          # "Sign test" = "signtest",
+                          # "Wilcoxon Signed-Rank test" = "wilcoxon",
+                          # "Spearman's Rank Correlation" = "spearman",
+                          # "Permutation signed rank test" = "permtest"
                         )
                       ),
                       selected = ""
