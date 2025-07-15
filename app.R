@@ -318,19 +318,37 @@ run_anova_analysis <- function(df, response_var, group_var) {
 
 
 # GLMM Analysis
-run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
-  formula_str <- paste0(response_var, " ~ ", 
-                       paste(predictor_vars, collapse = " + "), 
-                       " + (1|", random_effect, ")")
+run_gee_analysis <- function(df, response_var, predictor_vars, cluster_id, family = "poisson") {
+  formula_str <- paste0(response_var, " ~ ", paste(predictor_vars, collapse = " + "))
   
-  model <- lme4::glmer(as.formula(formula_str), 
-                      family = family, 
-                      data = df)
+  # For Poisson family, convert response variable to integer if needed
+  if (family == "poisson") {
+    df[[response_var]] <- as.integer(round(df[[response_var]]))
+  }
+  
+  # Create GEE model using geepack
+  gee_model <- geepack::geeglm(
+    as.formula(formula_str),
+    family = family,
+    data = df,
+    id = as.factor(df[[cluster_id]]),  # Ensure cluster ID is treated as factor
+    corstr = "exchangeable"
+  )
   
   list(
-    summary = summary(model),
+    summary = summary(gee_model),
     plot = function() {
-      plot(model, main = "GLMM Residuals vs. Fitted")
+      # Get fitted values and residuals
+      fitted <- fitted(gee_model)
+      residuals <- residuals(gee_model)
+      
+      # Create plot
+      plot(fitted, residuals,
+           xlab = "Fitted values",
+           ylab = "Residuals",
+           main = "GEE Residuals vs. Fitted",
+           pch = 16, col = "blue")
+      abline(h = 0, lty = 2)
     }
   )
 }
@@ -1422,6 +1440,21 @@ prepare_response_variable <- function(df, var_name) {
                      selected = "poisson")
       },
 
+      if (input$analysisType == "gee") {
+        # Get categorical variables for cluster ID
+        categorical_vars <- format_vars(names(df)[sapply(df, function(x) is.factor(x) || is.character(x))])
+        
+        selectizeInput("clusterID", "Cluster/Group ID:",
+                       choices = categorical_vars,
+                       options = list(render = I(
+                         '{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'
+                       )))
+      },
+
       if (input$analysisType == "chisq") {
         tagList(
           selectizeInput("chisqVar", "Variable for Chi-squared Test:",
@@ -1508,6 +1541,13 @@ observeEvent(input$runAnalysis, {
         input$responseVar,
         input$predictorVars,
         input$randomEffect,
+        input$glmmFamily
+      ),
+      "gee" = run_gee_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$clusterID,
         input$glmmFamily
       ),
       # Add other analysis types here
