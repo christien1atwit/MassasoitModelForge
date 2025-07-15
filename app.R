@@ -1397,15 +1397,17 @@ prepare_response_variable <- function(df, var_name) {
       },
 
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
-        selectizeInput("groupVar", "Grouping Variable:",
+        selectizeInput("groupVar", "Grouping Variables:",
                      choices = char_data_cols,
-                     options = list(render = I(
-                       '{
+                     multiple = TRUE,
+                     options = list(
+                       render = I('{
                          item: function(item, escape) { 
                            return "<div>" + escape(item.label) + "</div>"; 
                          }
-                       }'
-                     )))
+                       }'),
+                       delimiter = "+"
+                     ))
       },
 
       if (input$analysisType == "logistic") {
