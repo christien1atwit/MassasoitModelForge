@@ -1552,10 +1552,22 @@ prepare_response_variable <- function(df, var_name) {
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
       } else if (input$analysisType == "gamm") {
-        selectizeInput("gammFamily", "Family for GAMM:",
-                     choices = c("gaussian", "binomial", "poisson", "Gamma", "inverse.gaussian"),
-                     selected = "gaussian")
-      },
+  tagList(
+    selectizeInput("gammFamily", "Family for GAMM:",
+                 choices = c("gaussian", "binomial", "poisson", "Gamma", "inverse.gaussian"),
+                 selected = "gaussian"),
+    selectizeInput("linearTerms", "Linear Terms:",
+                 choices = all_data_cols,  # This will show all available variables
+                 multiple = TRUE,  # Allow multiple selections
+                 options = list(
+                   render = I('{
+                     item: function(item, escape) { 
+                       return "<div>" + escape(item.label) + "</div>"; 
+                     }
+                   }')
+                 ))
+  )
+},
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "glmm", "gamm", "anova", "kruskal",
                                     "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney", "gwr")) {
