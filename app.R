@@ -406,7 +406,7 @@ ui <- fluidPage(
       ,
         div(class = "header-left",
           actionLink(
-            "appTitleLink",
+            "appTitleLink_about",
             "Massasoit Model Forge",
             class = "app-title-link"
           )
@@ -959,7 +959,7 @@ server <- function(input, output, session) {
     navigateToPage("app")
   })
 
-  observeEvent(input$appTitleLink, {
+  observeEvent(input$appTitleLink_about, {
     if (appState$currentPage != "landing") {
       navigateToPage("landing")
     }
