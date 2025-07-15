@@ -1413,6 +1413,10 @@ prepare_response_variable <- function(df, var_name) {
         selectizeInput("glmmFamily", "Family for GLMM/GEE:",
                      choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
                      selected = "poisson")
+      } else if (input$analysisType == "gamm") {
+        selectizeInput("gammFamily", "Family for GAMM:",
+                     choices = c("gaussian", "binomial", "poisson", "Gamma", "inverse.gaussian"),
+                     selected = "gaussian")
       },
       # Common parameters for most analyses
       if (input$analysisType %in% c("linear", "glmm", "gamm", "anova", "kruskal",
