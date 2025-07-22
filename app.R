@@ -14,22 +14,63 @@ library(readxl)
 library(ggplot2)
 library(BSDA)
 
+# Initialize Python environment setup
+if (!requireNamespace("reticulate", quietly = TRUE)) {
+  install.packages("reticulate")
+}
 
-# in R studio, write and run a file with the following code:
-# install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr", "ggplot2"))
-# library(reticulate)
-# reticulate::install_miniconda()  # If not already installed
-# reticulate::conda_create("MassasoitModelForge_env")
-# reticulate::use_condaenv("MassasoitModelForge_env")
+# Set up Conda environment
+conda_path <- Sys.getenv("CONDA_EXE")
+if (is.na(conda_path)) {
+  conda_path <- "C:/Users/TEKOWNER/AppData/Local/r-miniconda"
+}
 
-# # Activate the conda environment
-# reticulate::use_condaenv("MassasoitModelForge_env", required = TRUE)
+# Create environment if it doesn't exist
+env_name <- "MassasoitModelForge_env"
+if (!env_name %in% reticulate::conda_list()[["name"]]) {
+  reticulate::conda_create(envname = env_name, python_version = "3.10")
+  
+  # Install Python packages
+  packages <- c(
+    "pandas",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "python-dateutil",
+    "pytz",
+    "requests",
+    "openpyxl"
+  )
+  
+  for (pkg in packages) {
+    reticulate::py_install(
+      pkg,
+      envname = env_name,
+      pip = TRUE,
+      conda = conda_path
+    )
+  }
+}
 
-# # Install required Python packages
-# reticulate::py_install(c("pandas", "numpy", "scipy", "scikit-learn"), envname = "MassasoitModelForge_env")
+# Import Python modules
+library(reticulate)
+use_condaenv(env_name, required = TRUE)
+noaa_ncei <- import("noaa_ncei")
 
-# # Verify the installation
-# reticulate::py_module_available("pandas")
+# Verify Python packages are installed
+message("Verifying Python packages...")
+tryCatch({
+  message("Checking requests package...")
+  reticulate::py_module_available("requests")
+  message("Python packages verified successfully!")
+}, error = function(e) {
+  message("Error verifying Python packages:", conditionMessage(e))
+  message("Please check the Conda environment and try again.")
+  stop("Python environment setup failed. Please check the logs.")
+})
+
+# Load Python module
+ncei <- import("noaa_ncei")
 
 # Rscript -e "shiny::runApp('app.R', host = '0.0.0.0', port = 8000, launch.browser = TRUE)"
 
@@ -906,17 +947,23 @@ ui <- fluidPage(
                 id = "sidebarTabs",
                 tabPanel(
                   "Data",
+                  # Data source selection
                   div(class = "form-group",
                     radioButtons(
                       "dataSource",
                       "Choose data source:",
                       choices = c(
                         "Use base file" = "base",
-                        "Upload your own file" = "upload",
-                        "Online Databases" = "api"
+                        "Upload your own file" = "upload"
                       ),
-                      selected = "base"
+                      selected = "base",
+                      inline = TRUE
                     )
+                  ),
+
+                  # Online databases checkbox
+                  div(class = "form-group",
+                    checkboxInput("useOnlineDatabases", "Use Online Databases", value = FALSE)
                   ),
 
                   # Conditional panel for base file selection
@@ -956,15 +1003,31 @@ ui <- fluidPage(
 
                   # Conditional panel for online databases
                   conditionalPanel(
-                    condition = "input.dataSource == 'api'",
+                    condition = "input.useOnlineDatabases",
                     div(class = "form-group",
                       selectInput(
                         "apiSource", 
                         "Select Data Source:",
-                        choices = c("Traffic", "Visual Crossing")
+                        choices = c("Traffic", "NOAA NCEI Weather Data" = "ncei")
                       ),
-                      # Placeholder for API-specific parameters
                       uiOutput("apiParams")
+                    )
+                  ),
+
+                  # Conditional panel for NOAA NCEI integration
+                  conditionalPanel(
+                    condition = "input.apiSource == 'ncei'",
+                    div(class = "form-group",
+                      wellPanel(
+                        h4("NOAA NCEI Weather Data Integration"),
+                        textInput("ncei_token", "NOAA API Token", ""),
+                        numericInput("latitude", "Latitude", value = 42.18),
+                        numericInput("longitude", "Longitude", value = -71.17),
+                        actionButton("find_stations", "Find Nearby Stations"),
+                        selectInput("selected_station", "Select Station", choices = NULL),
+                        actionButton("fetch_weather", "Fetch Weather Data"),
+                        checkboxInput("append_to_data", "Append to existing data", value = TRUE)
+                      )
                     )
                   ),
                   
@@ -1075,6 +1138,103 @@ ui <- fluidPage(
 
 # Server logic
 server <- function(input, output, session) {
+  # Initialize NOAA client
+  ncei_client <- reactive({
+    if (is.null(input$ncei_token) || input$ncei_token == "") {
+      NULL
+    } else {
+      ncei$NOAANCEIClient()
+    }
+  })
+
+  # Find nearby stations
+  observeEvent(input$find_stations, {
+    if (is.null(ncei_client())) return(NULL)
+    
+    tryCatch({
+      # Get location ID first
+      location_id <- ncei_client()$get_location_by_coordinates(
+        input$latitude, input$longitude
+      )
+      
+      if (!is.null(location_id)) {
+        # Then get stations using the location ID
+        stations <- ncei_client()$get_stations(location = location_id)
+        
+        if (!is.null(stations) && !is.null(stations$results)) {
+          stations_df <- data.frame(
+            id = sapply(stations$results, function(x) x$id),
+            name = sapply(stations$results, function(x) x$name),
+            latitude = sapply(stations$results, function(x) x$latitude),
+            longitude = sapply(stations$results, function(x) x$longitude),
+            elevation = sapply(stations$results, function(x) x$elevation)
+          )
+          
+          output$stations_table <- renderDT({
+            datatable(stations_df)
+          })
+          
+          updateSelectInput(session, "selected_station", 
+                           choices = stations_df$id,
+                           selected = stations_df$id[1])
+        }
+      }
+    }, error = function(e) {
+      showNotification(paste("Error fetching stations: ", e$message), type = "error")
+    })
+  })
+
+  # Fetch weather data
+  observeEvent(input$fetch_weather, {
+    if (is.null(ncei_client()) || is.null(input$selected_station)) return(NULL)
+    
+    # Get date range from existing data if available
+    date_range <- reactive({
+      if (exists("data") && !is.null(data())) {
+        dates <- as.Date(data()$date)
+        list(
+          start = min(dates),
+          end = max(dates)
+        )
+      } else {
+        list(
+          start = Sys.Date() - 365,
+          end = Sys.Date()
+        )
+      }
+    })
+    
+    tryCatch({
+      weather_data <- ncei_client()$get_weather_data(
+        input$selected_station,
+        format(date_range()$start, "%Y-%m-%d"),
+        format(date_range()$end, "%Y-%m-%d")
+      )
+      
+      if (!is.null(weather_data)) {
+        processed_data <- ncei_client()$process_weather_data(weather_data)
+        
+        output$weather_data_table <- renderDT({
+          datatable(processed_data)
+        })
+        
+        if (input$append_to_data && exists("data") && !is.null(data())) {
+          # Merge with existing data
+          merged_data <- merge(
+            data(),
+            processed_data,
+            by = "date",
+            all = TRUE
+          )
+          
+          # Update the reactive value
+          data <<- merged_data
+        }
+      }
+    }, error = function(e) {
+      showNotification("Error fetching weather data: " %>% e$message, type = "error")
+    })
+  })
   # Function to safely convert columns to appropriate types
   clean_and_convert <- function(df) {
     # Function to guess and convert column types
