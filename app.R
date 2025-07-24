@@ -12,23 +12,65 @@ library(spgwr) # For GWR
 library(readr)
 library(readxl)
 library(ggplot2)
+library(BSDA)
 
+# Initialize Python environment setup
+if (!requireNamespace("reticulate", quietly = TRUE)) {
+  install.packages("reticulate")
+}
 
-# in R studio, write and run a file with the following code:
-# install.packages(c("shiny", "shinyjs", "reticulate", "DT", "readxl", "lme4", "mgcv", "MASS", "pscl", "geepack", "spgwr", "readr", "ggplot2"))
-# library(reticulate)
-# reticulate::install_miniconda()  # If not already installed
-# reticulate::conda_create("MassasoitModelForge_env")
-# reticulate::use_condaenv("MassasoitModelForge_env")
+# Set up Conda environment
+conda_path <- Sys.getenv("CONDA_EXE")
+if (is.na(conda_path)) {
+  conda_path <- "C:/Users/TEKOWNER/AppData/Local/r-miniconda"
+}
 
-# # Activate the conda environment
-# reticulate::use_condaenv("MassasoitModelForge_env", required = TRUE)
+# Create environment if it doesn't exist
+env_name <- "MassasoitModelForge_env"
+if (!env_name %in% reticulate::conda_list()[["name"]]) {
+  reticulate::conda_create(envname = env_name, python_version = "3.10")
+  
+  # Install Python packages
+  packages <- c(
+    "pandas",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "python-dateutil",
+    "pytz",
+    "requests",
+    "openpyxl"
+  )
+  
+  for (pkg in packages) {
+    reticulate::py_install(
+      pkg,
+      envname = env_name,
+      pip = TRUE,
+      conda = conda_path
+    )
+  }
+}
 
-# # Install required Python packages
-# reticulate::py_install(c("pandas", "numpy", "scipy", "scikit-learn"), envname = "MassasoitModelForge_env")
+# Import Python modules
+library(reticulate)
+use_condaenv(env_name, required = TRUE)
+noaa_ncei <- import("noaa_ncei")
 
-# # Verify the installation
-# reticulate::py_module_available("pandas")
+# Verify Python packages are installed
+message("Verifying Python packages...")
+tryCatch({
+  message("Checking requests package...")
+  reticulate::py_module_available("requests")
+  message("Python packages verified successfully!")
+}, error = function(e) {
+  message("Error verifying Python packages:", conditionMessage(e))
+  message("Please check the Conda environment and try again.")
+  stop("Python environment setup failed. Please check the logs.")
+})
+
+# Load Python module
+ncei <- import("noaa_ncei")
 
 # Rscript -e "shiny::runApp('app.R', host = '0.0.0.0', port = 8000, launch.browser = TRUE)"
 
@@ -123,37 +165,33 @@ tryCatch({
 # Function to read and clean data (Can be expanded for more than logistic regression)
 read_data_file <- function(file_path, file_name) {
   # ... existing code ...
-  
+
   # After loading and cleaning data
   df <- clean_and_convert(df)
-  
+
   # Identify suitable logistic response variables
   suitable_logistic_vars <- sapply(names(df), function(col) {
     is_logistic_response(df, col)
   })
-  
+
   # Store suitable variables in reactive value
   suitable_response_vars <- reactiveVal()
   suitable_response_vars(names(df)[suitable_logistic_vars])
-  
+
   return(df)
 }
-
-
-
-
 
 # Linear Regression Analysis
 run_linear_analysis <- function(df, response_var, predictor_vars) {
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
   model <- lm(as.formula(formula_str), data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
       if (length(predictor_vars) == 1) {
         plot(df[[predictor_vars[1]]], df[[response_var]],
-             xlab = predictor_vars[1], 
+             xlab = predictor_vars[1],
              ylab = response_var,
              main = paste("Linear Regression:", response_var, "vs", predictor_vars[1]))
         abline(model, col = "blue", lwd = 2)
@@ -166,68 +204,43 @@ run_linear_analysis <- function(df, response_var, predictor_vars) {
   )
 }
 
-
-
-# Logistic Regression Analysis
-run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
-  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
-  model <- glm(as.formula(formula_str), family = family, data = df)
-  
-  list(
-    summary = summary(model),
-    plot = function() {
-      if (length(predictor_vars) > 0) {
-        predictor_to_plot <- predictor_vars[1]
-        plot(df[[predictor_to_plot]], predict(model, type = "response"),
-             xlab = predictor_to_plot, 
-             ylab = "Predicted Probability",
-             main = "Logistic Regression: Predicted Probabilities")
-        points(df[[predictor_to_plot]], df[[response_var]], 
-               col = "red", pch = 16)
-      } else {
-        plot(1, 1, type = "n", 
-             main = "No plot available for this configuration")
-      }
-    }
-  )
-}
-
 # Function to identify and categorize suitable logistic response variables
 is_logistic_response <- function(df, col_name) {
   col <- df[[col_name]]
-  
+
   # Check if column is numeric or logical
   if (!is.numeric(col) && !is.logical(col)) {
     return("unsuitable")
   }
-  
+
   # For numeric columns
   if (is.numeric(col)) {
     # Remove NA values for checking
     col <- na.omit(col)
-    
+
     # Check if all values are either 0 or 1
     if (all(col %in% c(0, 1))) {
       return("binary")
     }
-    
+
     # Check if all values are proportions (0 <= x <= 1)
     if (all(col >= 0 & col <= 1)) {
       return("proportion")
     }
-    
+
     # Check if column has only non-zero values of same sign
     non_zero <- col[col != 0]
-    if (length(non_zero) > 0) {
+    zero <- col[col == 0]
+    if (length(non_zero) > 0 && length(zero) > 0) {
       # Check if all non-zero values are positive or all negative
       if (all(non_zero > 0) || all(non_zero < 0)) {
         return("convertible")
       }
     }
-    
+
     return("unsuitable")
   }
-  
+
   # For logical columns, they're automatically suitable
   return("binary")
 }
@@ -235,30 +248,30 @@ is_logistic_response <- function(df, col_name) {
 # Function to convert convertible variables to binary
 convert_to_binary <- function(df, col_name) {
   col <- df[[col_name]]
-  
+
   # Convert non-zero values to 1, keep zeros as 0
   df[[col_name]] <- ifelse(col != 0, 1, 0)
   return(df)
 }
 
-# Add this function before the analysis dispatch in the server section
+#Logistic Regression Analysis
 run_logistic_analysis <- function(df, response_var, predictor_vars, family = "binomial") {
   # Convert convertible variables before analysis
   var_type <- is_logistic_response(df, response_var)
   if (var_type == "convertible") {
     df <- convert_to_binary(df, response_var)
   }
-  
+
   # Prepare formula
   formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
-  
+
   # Run logistic regression with proper error handling
   tryCatch({
     model <- glm(as.formula(formula_str), family = family, data = df)
-    
+
     # Create summary and plot
     model_summary <- summary(model)
-    
+
     # Create plot function that will be called by Shiny
     plot_func <- function() {
       if (length(predictor_vars) > 0) {
@@ -268,7 +281,7 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
           y = df[[response_var]],
           predicted = predict(model, type = "response")
         )
-        
+
         # Create base R plot
         plot(
           plot_data$x,
@@ -282,12 +295,12 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
         )
         points(plot_data$x, plot_data$y, col = "red", pch = 16)
       } else {
-        plot(1, 1, type = "n", 
+        plot(1, 1, type = "n",
              main = "No plot available for this configuration",
              xlab = "", ylab = "")
       }
     }
-    
+
     list(
       summary = model_summary,
       plot = plot_func
@@ -302,30 +315,168 @@ run_logistic_analysis <- function(df, response_var, predictor_vars, family = "bi
 run_anova_analysis <- function(df, response_var, group_var) {
   formula_str <- paste(response_var, "~", group_var)
   model <- aov(as.formula(formula_str), data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
       boxplot(as.formula(formula_str), data = df,
               main = paste("ANOVA: ", response_var, " by ", group_var),
-              xlab = group_var, 
+              xlab = group_var,
+              ylab = response_var)
+    }
+  )
+}
+# Chi-squared test
+run_chisq_analysis <- function(df, response_var, group_var) {
+  tbl <- table(df[[response_var]], df[[group_var]])
+  test <- chisq.test(tbl)
+  list(
+    summary = test,
+    plot = function() {
+      barplot(tbl, beside = TRUE, legend = TRUE,
+              main = "Contingency Table",
+              xlab = group_var, ylab = "Count")
+    }
+  )
+}
+
+# Mann-Whitney U test (Wilcoxon rank sum test)
+run_mannwhitney_analysis <- function(df, response_var, group_var) {
+  x <- df[[response_var]][df[[group_var]] == unique(df[[group_var]])[1]]
+  y <- df[[response_var]][df[[group_var]] == unique(df[[group_var]])[2]]
+  test <- wilcox.test(x, y)
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(df[[response_var]] ~ df[[group_var]],
+              main = "Mann-Whitney U Test",
+              xlab = group_var, ylab = response_var)
+    }
+  )
+}
+# Kruskal-Wallis test
+run_kruskal_analysis <- function(df, response_var, group_var) {
+  test <- kruskal.test(df[[response_var]] ~ df[[group_var]])
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(df[[response_var]] ~ df[[group_var]],
+              main = "Kruskal-Wallis Test",
+              xlab = group_var, ylab = response_var)
+    }
+  )
+}
+
+# Hurdle model using pscl::hurdle
+run_hurdle_analysis <- function(df, response_var, predictor_vars) {
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  model <- pscl::hurdle(as.formula(formula_str), data = df)
+  list(
+    summary = summary(model),
+    plot = function() {
+      plot(model, main = "Hurdle Model Diagnostics")
+    }
+  )
+}
+
+# Sign test (paired data)
+run_signtest_analysis <- function(df, response_var, group_var) {
+  library(BSDA)
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Sign test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  n <- min(length(x), length(y))
+  test <- BSDA::SIGN.test(x[1:n], y[1:n])
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(x[1:n], y[1:n], names = levels,
+              main = "Sign Test",
               ylab = response_var)
     }
   )
 }
 
+# Wilcoxon signed-rank test (paired)
+run_wilcoxon_analysis <- function(df, response_var, group_var) {
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Wilcoxon signed-rank test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  n <- min(length(x), length(y))
+  test <- wilcox.test(x[1:n], y[1:n], paired = TRUE)
+  list(
+    summary = test,
+    plot = function() {
+      boxplot(x[1:n], y[1:n], names = levels,
+              main = "Wilcoxon Signed-Rank Test",
+              ylab = response_var)
+    }
+  )
+}
 
+# Spearman's rank correlation
+run_spearman_analysis <- function(df, response_var, predictor_var) {
+  test <- cor.test(df[[response_var]], df[[predictor_var]], method = "spearman")
+  list(
+    summary = test,
+    plot = function() {
+      plot(df[[predictor_var]], df[[response_var]],
+           main = "Spearman Correlation",
+           xlab = predictor_var, ylab = response_var)
+      abline(lm(df[[response_var]] ~ df[[predictor_var]]), col = "blue")
+    }
+  )
+}
+
+# Permutation test for difference in means (simple version)
+run_permtest_analysis <- function(df, response_var, group_var) {
+  levels <- unique(df[[group_var]])
+  if (length(levels) != 2) {
+    stop("Permutation test requires exactly two groups.")
+  }
+  x <- df[[response_var]][df[[group_var]] == levels[1]]
+  y <- df[[response_var]][df[[group_var]] == levels[2]]
+  obs_diff <- mean(x, na.rm = TRUE) - mean(y, na.rm = TRUE)
+  n_perm <- 1000
+  perm_diffs <- replicate(n_perm, {
+    perm <- sample(c(x, y))
+    mean(perm[1:length(x)], na.rm = TRUE) - mean(perm[(length(x)+1):(length(x)+length(y))], na.rm = TRUE)
+  })
+  p_value <- mean(abs(perm_diffs) >= abs(obs_diff))
+  result <- list(
+    statistic = obs_diff,
+    p.value = p_value,
+    method = "Permutation test for difference in means",
+    alternative = "two.sided"
+  )
+  class(result) <- "htest"
+  list(
+    summary = result,
+    plot = function() {
+      hist(perm_diffs, breaks = 30, main = "Permutation Test Null Distribution",
+           xlab = "Difference in Means")
+      abline(v = obs_diff, col = "red", lwd = 2)
+      legend("topright", legend = "Observed diff", col = "red", lwd = 2)
+    }
+  )
+}
 
 # GLMM Analysis
 run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, family = "poisson") {
-  formula_str <- paste0(response_var, " ~ ", 
-                       paste(predictor_vars, collapse = " + "), 
+  formula_str <- paste0(response_var, " ~ ",
+                       paste(predictor_vars, collapse = " + "),
                        " + (1|", random_effect, ")")
-  
-  model <- lme4::glmer(as.formula(formula_str), 
-                      family = family, 
+
+  model <- lme4::glmer(as.formula(formula_str),
+                      family = family,
                       data = df)
-  
+
   list(
     summary = summary(model),
     plot = function() {
@@ -334,24 +485,149 @@ run_glmm_analysis <- function(df, response_var, predictor_vars, random_effect, f
   )
 }
 
-#Zero Inflated Model
-run_zeroinfl_analysis <- function(df, response_var, predictor_vars) {
-  formula_str <- paste(response_var, "~", predictor_vars)
-  model <- zeroinfl(as.formula(formula_str), data = df)
-  
+run_gwr_analysis <- function(df, response_var, predictor_vars, bandwidth = NULL) {
+  # Check for coordinates column
+  if (!"coordinates" %in% names(df)) {
+    stop("Data must contain a 'coordinates' column with spatial coordinates.")
+  }
+
+  # Extract coordinates (assume list-column or character "lat,lon")
+  coords <- df$coordinates
+  if (is.list(coords)) {
+    coords_mat <- do.call(rbind, coords)
+  } else if (is.character(coords)) {
+    coords_mat <- do.call(rbind, strsplit(coords, ","))
+    coords_mat <- apply(coords_mat, 2, as.numeric)
+  } else if (is.matrix(coords) || is.data.frame(coords)) {
+    coords_mat <- as.matrix(coords)
+  } else {
+    stop("Unrecognized format for 'coordinates' column.")
+  }
+  if (ncol(coords_mat) != 2) stop("Coordinates must have two columns (lat, lon).")
+  colnames(coords_mat) <- c("lat", "lon")
+
+  # Prepare formula
+  formula_str <- paste(response_var, "~", paste(predictor_vars, collapse = " + "))
+  gwr_formula <- as.formula(formula_str)
+
+  # Set bandwidth if not provided
+  if (is.null(bandwidth)) {
+    bandwidth <- spgwr::gwr.sel(gwr_formula, data = df, coords = coords_mat)
+  }
+
+  # Run GWR
+  gwr_result <- spgwr::gwr(
+    gwr_formula,
+    data = df,
+    coords = coords_mat,
+    bandwidth = bandwidth,
+    hatmatrix = TRUE,
+    se.fit = TRUE
+  )
+
   list(
-    summary = summary(model),
+    summary = gwr_result$SDF,
     plot = function() {
-      boxplot(as.formula(formula_str), data = df,
-              main = paste("ANOVA: ", response_var, " by ", group_var),
-              xlab = group_var, 
-              ylab = response_var)
+      # Plot the spatial distribution of the fitted values
+      plot(
+        coords_mat,
+        col = heat.colors(100)[cut(gwr_result$SDF$pred, 100)],
+        pch = 19,
+        xlab = "Longitude",
+        ylab = "Latitude",
+        main = "GWR Fitted Values"
+      )
+      legend("topright", legend = "Fitted", pch = 19, col = "red")
     }
   )
 }
 
-#######################################################################
+# GAMM Analysis
+run_gamm_analysis <- function(df, response_var, predictor_vars, random_effect = NULL, linear_terms = NULL, family = "gaussian") {
+  tryCatch({
+    # Convert family to function if it's a string
+    if (is.character(family)) {
+      family <- get(family, mode = "function", envir = parent.frame())
+    }
 
+    # Create formula for smooth terms (non-linear predictors)
+    smooth_terms <- if (!is.null(predictor_vars)) {
+      paste0("s(", predictor_vars, ")", collapse = " + ")
+    } else {
+      ""
+    }
+
+    # Add linear terms if specified
+    if (!is.null(linear_terms) && length(linear_terms) > 0) {
+      linear_terms_str <- paste(linear_terms, collapse = " + ")
+      if (nzchar(smooth_terms)) {
+        smooth_terms <- paste(smooth_terms, linear_terms_str, sep = " + ")
+      } else {
+        smooth_terms <- linear_terms_str
+      }
+    }
+
+    # Create the formula
+    formula_str <- if (nzchar(smooth_terms)) {
+      paste(response_var, "~", smooth_terms)
+    } else {
+      paste(response_var, "~ 1")  # Intercept-only model if no predictors
+    }
+
+    # Remove any double plusses from the formula
+    formula_str <- gsub("\\+\\s*\\+", "+", formula_str)
+
+    # Prepare random effects if specified
+    random_effect_list <- NULL
+    if (!is.null(random_effect) && length(random_effect) > 0) {
+      # Create a named list with the random effect formula
+      random_effect_list <- list(as.formula(paste0("~ 1 | ", random_effect[1])))
+      names(random_effect_list) <- random_effect[1]
+    }
+
+    # Create the model call
+    if (!is.null(random_effect_list)) {
+      # If we have random effects, use gamm with the random parameter
+      model <- gamm(
+        as.formula(formula_str),
+        random = random_effect_list,
+        family = family,
+        data = df,
+        method = "REML"
+      )
+    } else {
+      # If no random effects, just use gam for better performance
+      model <- list(
+        gam = mgcv::gam(
+          as.formula(formula_str),
+          family = family,
+          data = df,
+          method = "REML"
+        ),
+        lme = NULL
+      )
+    }
+
+    # Return summary and plot function
+    list(
+      summary = summary(model$gam),
+      plot = function() {
+        par(mfrow = c(2, 2))
+        plot(model$gam, pages = 1, residuals = TRUE, pch = 1, cex = 1, seWithMean = TRUE)
+        par(mfrow = c(1, 1))
+      }
+    )
+  }, error = function(e) {
+    stop(paste("Error in GAMM analysis:", e$message))
+  })
+}
+
+
+###################################################################
+
+######################     UI Definition           ##################
+
+#####################################################################
 
 
 # UI definition with custom CSS
@@ -417,7 +693,7 @@ ui <- fluidPage(
       ,
         div(class = "header-left",
           actionLink(
-            "appTitleLink",
+            "appTitleLink_about",
             "Massasoit Model Forge",
             class = "app-title-link"
           )
@@ -461,21 +737,35 @@ ui <- fluidPage(
         tags$div(id = "sammyModal", class = "modal",
           tags$div(class = "modal-content",
             tags$span(class = "close", "×"),
-            h3("Sammy Olsen"),
-            p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: spamolsen")
+            div(style = "display: flex; flex-direction: column; align-items: center; gap: 20px;",
+              img(src = "sammy_bio_image.jpg", 
+                  style = "width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #3498db;",
+                  alt = "Sammy Olsen"),
+              div(style = "text-align: center;",
+                h3("Sammy Olsen"),
+                p("Data Scientist and co-creator of Massasoit Model Forge."),
+                p(HTML("<a href='https://github.com/spamolsen' target='_blank'>GitHub: spamolsen</a>"))
+              )
+            )
           )
         ),
-        
+
         tags$div(id = "ianModal", class = "modal",
           tags$div(class = "modal-content",
             tags$span(class = "close", "×"),
-            h3("Ian Handy"),
-            p("Data Scientist and co-creator of Massasoit Model Forge."),
-            p("Github: vyndyctyv")
+            div(style = "display: flex; flex-direction: column; align-items: center; gap: 20px;",
+              img(src = "ian_bio_placeholder.png", 
+                  style = "width: 200px; height: 200px; border-radius: 50%; object-fit: cover; object-position: center 20%; border: 4px solid #3498db;",
+                  alt = "Ian Handy"),
+              div(style = "text-align: center;",
+                h3("Ian Handy"),
+                p("Data Scientist and co-creator of Massasoit Model Forge."),
+                p(HTML("<a href='https://github.com/ian-handy' target='_blank'>GitHub: ian-handy</a>"))
+              )
+            )
           )
         ),
-        
+
         # JavaScript for modals
         tags$script(HTML(
           "// Get the modals
@@ -592,7 +882,7 @@ ui <- fluidPage(
         p("Click on our names above to learn more about us or reach out through GitHub."),
         tags$ul(
           tags$li(tags$a(href = "https://github.com/spamolsen", target = "_blank", "GitHub: spamolsen")),
-          tags$li(tags$a(href = "https://github.com/vyndyctyv", target = "_blank", "GitHub: vyndyctyv"))
+          tags$li(tags$a(href = "https://github.com/ian-handy", target = "_blank", "GitHub: ian-handy"))
         )
       )
     )
@@ -657,17 +947,23 @@ ui <- fluidPage(
                 id = "sidebarTabs",
                 tabPanel(
                   "Data",
+                  # Data source selection
                   div(class = "form-group",
                     radioButtons(
                       "dataSource",
                       "Choose data source:",
                       choices = c(
                         "Use base file" = "base",
-                        "Upload your own file" = "upload",
-                        "Online Databases" = "api"
+                        "Upload your own file" = "upload"
                       ),
-                      selected = "base"
+                      selected = "base",
+                      inline = TRUE
                     )
+                  ),
+
+                  # Online databases checkbox
+                  div(class = "form-group",
+                    checkboxInput("useOnlineDatabases", "Use Online Databases", value = FALSE)
                   ),
 
                   # Conditional panel for base file selection
@@ -707,15 +1003,31 @@ ui <- fluidPage(
 
                   # Conditional panel for online databases
                   conditionalPanel(
-                    condition = "input.dataSource == 'api'",
+                    condition = "input.useOnlineDatabases",
                     div(class = "form-group",
                       selectInput(
                         "apiSource", 
                         "Select Data Source:",
-                        choices = c("Traffic", "Visual Crossing")
+                        choices = c("Traffic", "NOAA NCEI Weather Data" = "ncei")
                       ),
-                      # Placeholder for API-specific parameters
                       uiOutput("apiParams")
+                    )
+                  ),
+
+                  # Conditional panel for NOAA NCEI integration
+                  conditionalPanel(
+                    condition = "input.apiSource == 'ncei'",
+                    div(class = "form-group",
+                      wellPanel(
+                        h4("NOAA NCEI Weather Data Integration"),
+                        textInput("ncei_token", "NOAA API Token", ""),
+                        numericInput("latitude", "Latitude", value = 42.18),
+                        numericInput("longitude", "Longitude", value = -71.17),
+                        actionButton("find_stations", "Find Nearby Stations"),
+                        selectInput("selected_station", "Select Station", choices = NULL),
+                        actionButton("fetch_weather", "Fetch Weather Data"),
+                        checkboxInput("append_to_data", "Append to existing data", value = TRUE)
+                      )
                     )
                   ),
                   
@@ -826,6 +1138,103 @@ ui <- fluidPage(
 
 # Server logic
 server <- function(input, output, session) {
+  # Initialize NOAA client
+  ncei_client <- reactive({
+    if (is.null(input$ncei_token) || input$ncei_token == "") {
+      NULL
+    } else {
+      ncei$NOAANCEIClient()
+    }
+  })
+
+  # Find nearby stations
+  observeEvent(input$find_stations, {
+    if (is.null(ncei_client())) return(NULL)
+    
+    tryCatch({
+      # Get location ID first
+      location_id <- ncei_client()$get_location_by_coordinates(
+        input$latitude, input$longitude
+      )
+      
+      if (!is.null(location_id)) {
+        # Then get stations using the location ID
+        stations <- ncei_client()$get_stations(location = location_id)
+        
+        if (!is.null(stations) && !is.null(stations$results)) {
+          stations_df <- data.frame(
+            id = sapply(stations$results, function(x) x$id),
+            name = sapply(stations$results, function(x) x$name),
+            latitude = sapply(stations$results, function(x) x$latitude),
+            longitude = sapply(stations$results, function(x) x$longitude),
+            elevation = sapply(stations$results, function(x) x$elevation)
+          )
+          
+          output$stations_table <- renderDT({
+            datatable(stations_df)
+          })
+          
+          updateSelectInput(session, "selected_station", 
+                           choices = stations_df$id,
+                           selected = stations_df$id[1])
+        }
+      }
+    }, error = function(e) {
+      showNotification(paste("Error fetching stations: ", e$message), type = "error")
+    })
+  })
+
+  # Fetch weather data
+  observeEvent(input$fetch_weather, {
+    if (is.null(ncei_client()) || is.null(input$selected_station)) return(NULL)
+    
+    # Get date range from existing data if available
+    date_range <- reactive({
+      if (exists("data") && !is.null(data())) {
+        dates <- as.Date(data()$date)
+        list(
+          start = min(dates),
+          end = max(dates)
+        )
+      } else {
+        list(
+          start = Sys.Date() - 365,
+          end = Sys.Date()
+        )
+      }
+    })
+    
+    tryCatch({
+      weather_data <- ncei_client()$get_weather_data(
+        input$selected_station,
+        format(date_range()$start, "%Y-%m-%d"),
+        format(date_range()$end, "%Y-%m-%d")
+      )
+      
+      if (!is.null(weather_data)) {
+        processed_data <- ncei_client()$process_weather_data(weather_data)
+        
+        output$weather_data_table <- renderDT({
+          datatable(processed_data)
+        })
+        
+        if (input$append_to_data && exists("data") && !is.null(data())) {
+          # Merge with existing data
+          merged_data <- merge(
+            data(),
+            processed_data,
+            by = "date",
+            all = TRUE
+          )
+          
+          # Update the reactive value
+          data <<- merged_data
+        }
+      }
+    }, error = function(e) {
+      showNotification("Error fetching weather data: " %>% e$message, type = "error")
+    })
+  })
   # Function to safely convert columns to appropriate types
   clean_and_convert <- function(df) {
     # Function to guess and convert column types
@@ -970,7 +1379,7 @@ server <- function(input, output, session) {
     navigateToPage("app")
   })
 
-  observeEvent(input$appTitleLink, {
+  observeEvent(input$appTitleLink_about, {
     if (appState$currentPage != "landing") {
       navigateToPage("landing")
     }
@@ -1157,6 +1566,10 @@ server <- function(input, output, session) {
         } else {
           stop("Unsupported file format. Please use .xlsx, .xls, or .csv files.")
         }
+
+        # Append coordinates
+        py_df <- r_to_py(df)
+        df <- data_utils$append_coord(py_df)
         
         # Clean and convert column types
         df <- clean_and_convert(df)
@@ -1349,13 +1762,41 @@ prepare_response_variable <- function(df, var_name) {
     all_data_cols <- format_vars(names(df))
     num_data_cols <- format_vars(names(df)[sapply(df, is.numeric)])
     char_data_cols <- format_vars(names(df)[sapply(df, is.character)])
+    logistic_cols <- format_vars(names(df)[sapply(names(df), function(col) is_logistic_response(df, col) != "unsuitable")])
+    
+    # For negative binomial, filter numeric variables that are counts (non-negative integers)
+    nb_cols <- format_vars(names(df)[sapply(names(df), function(x) {
+      var <- df[[x]]
+      is.numeric(var) && all(!is.na(var) & var >= 0 & var == floor(var))
+    })])
 
     # Include the CSS in the UI
     tagList(
       tags$head(tags$style(HTML(css_rules))),
+      if (input$analysisType == "glmm" || input$analysisType == "gee") {
+        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
+                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
+                     selected = "poisson")
+      } else if (input$analysisType == "gamm") {
+  tagList(
+    selectizeInput("gammFamily", "Family for GAMM:",
+                 choices = c("gaussian", "binomial", "poisson", "Gamma", "inverse.gaussian"),
+                 selected = "gaussian"),
+    selectizeInput("linearTerms", "Linear Terms:",
+                 choices = all_data_cols,  # This will show all available variables
+                 multiple = TRUE,  # Allow multiple selections
+                 options = list(
+                   render = I('{
+                     item: function(item, escape) { 
+                       return "<div>" + escape(item.label) + "</div>"; 
+                     }
+                   }')
+                 ))
+  )
+},
       # Common parameters for most analyses
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "anova", "kruskal",
-                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney")) {
+      if (input$analysisType %in% c("linear", "glmm", "gamm", "anova", "kruskal",
+                                    "gee", "zeroinfl", "hurdle", "wilcoxon", "signtest", "mannwhitney", "gwr")) {
         selectizeInput("responseVar", "Response Variable:",
                      choices = num_data_cols,
                      options = list(render = I(
@@ -1367,9 +1808,33 @@ prepare_response_variable <- function(df, var_name) {
                      )))
       },
 
-      if (input$analysisType %in% c("linear", "logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle")) {
+      if (input$analysisType == "negbin") {
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = nb_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      },
+
+      if (input$analysisType == "logistic") {
+        selectizeInput("responseVar", "Response Variable:",
+                     choices = logistic_cols,
+                     options = list(render = I(
+                       '{
+                         item: function(item, escape) { 
+                           return "<div>" + escape(item.label) + "</div>"; 
+                         }
+                       }'
+                     )))
+      },
+
+      if (input$analysisType %in% c("linear","logistic", "glmm", "gamm", "negbin", "gee", "zeroinfl", "hurdle", "gwr")) {
         selectizeInput("predictorVars", "Predictor Variables:",
-                     choices = num_data_cols,
+                     choices = all_data_cols,
                      multiple = TRUE,
                      options = list(
                        render = I('{
@@ -1381,40 +1846,37 @@ prepare_response_variable <- function(df, var_name) {
       },
 
       if (input$analysisType %in% c("glmm", "gamm")) {
-        selectizeInput("randomEffect", "Random Effects (e.g., (1|group) or (predictor|group)):",
+        selectizeInput("randomEffect", "Random Effects:",
                        choices = char_data_cols,
                        multiple = TRUE,
-                       options = list(create = TRUE, placeholder = "Type or select for random effects",
-                       render = I('{
-                         item: function(item, escape) { 
-                           return "<div style=\"text-align:right\">" + escape(item.label) + "</div>"; 
-                         }
-                       }')
-                     ))
+                       options = list(
+                         render = I('{
+                           item: function(item, escape) { 
+                             return "<div>" + escape(item.label) + "</div>"; 
+                           }
+                         }'),
+                         delimiter = "+"
+                       ))
       },
 
       if (input$analysisType %in% c("anova", "kruskal", "mannwhitney", "wilcoxon", "signtest")) {
-        selectizeInput("groupVar", "Grouping Variable:",
+        selectizeInput("groupVar", "Grouping Variables:",
                      choices = char_data_cols,
-                     options = list(render = I(
-                       '{
+                     multiple = TRUE,
+                     options = list(
+                       render = I('{
                          item: function(item, escape) { 
                            return "<div>" + escape(item.label) + "</div>"; 
                          }
-                       }'
-                     )))
+                       }'),
+                       delimiter = "+"
+                     ))
       },
 
       if (input$analysisType == "logistic") {
         selectizeInput("logisticFamily", "Family for Logistic Regression:",
                      choices = c("binomial", "quasibinomial"),
                      selected = "binomial")
-      },
-
-      if (input$analysisType == "glmm" || input$analysisType == "gee") {
-        selectizeInput("glmmFamily", "Family for GLMM/GEE:",
-                     choices = c("binomial", "poisson", "gaussian", "Gamma", "inverse.gaussian", "quasibinomial", "quasipoisson"),
-                     selected = "poisson")
       },
 
       if (input$analysisType == "chisq") {
@@ -1505,11 +1967,108 @@ observeEvent(input$runAnalysis, {
         input$randomEffect,
         input$glmmFamily
       ),
-      "zeroinfl" = run_zeroinfl_analysis(
+      "gee" = run_gee_analysis(
+        df,
+        input$responseVar,
+        input$predictorVars,
+        input$clusterID,
+        input$glmmFamily
+      ),
+      "chisq" = run_chisq_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "mannwhitney" = run_mannwhitney_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "kruskal" = run_kruskal_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "hurdle" = run_hurdle_analysis(
         df,
         input$responseVar,
         input$predictorVars
       ),
+      "signtest" = run_signtest_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "wilcoxon" = run_wilcoxon_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "spearman" = run_spearman_analysis(
+        df,
+        input$var1,
+        input$var2
+      ),
+      "permtest" = run_permtest_analysis(
+        df,
+        input$responseVar,
+        input$groupVar
+      ),
+      "gwr" = {
+        req(input$responseVar, input$predictorVars)
+        run_gwr_analysis(
+          df,
+          input$responseVar,
+          input$predictorVars
+        )
+      },
+      "negbin" = {
+        # For negative binomial, ensure we have a count variable
+        var <- df[[input$responseVar]]
+        if (!(is.numeric(var) && all(!is.na(var) & var >= 0 & var == floor(var)))) {
+          stop("Response variable must be a count variable (non-negative integers)")
+        }
+        
+        # Run negative binomial regression
+        formula_str <- paste0(input$responseVar, " ~ ", paste(input$predictorVars, collapse = " + "))
+        model <- MASS::glm.nb(as.formula(formula_str), data = df)
+        
+        list(
+          summary = summary(model),
+          plot = function() {
+            if (length(input$predictorVars) > 0) {
+              predictor_to_plot <- input$predictorVars[1]
+              plot_data <- data.frame(
+                x = df[[predictor_to_plot]],
+                y = df[[input$responseVar]],
+                predicted = predict(model, type = "response")
+              )
+              
+              plot(
+                plot_data$x,
+                plot_data$predicted,
+                xlab = predictor_to_plot,
+                ylab = "Predicted Counts",
+                main = "Negative Binomial Regression",
+                pch = 16,
+                col = "blue"
+              )
+              abline(h = 0, lty = 2)
+            }
+          }
+        )
+      },
+      "gamm" = {
+        # Run GAMM analysis
+        run_gamm_analysis(
+          df = df,
+          response_var = input$responseVar,
+          predictor_vars = input$predictorVars,
+          random_effect = input$randomEffect,
+          linear_terms = input$linearTerms,
+          family = input$gammFamily
+        )
+      },
       # Add other analysis types here
       NULL
     )
@@ -1522,7 +2081,7 @@ observeEvent(input$runAnalysis, {
       # Switch to results tab after successful analysis
       updateTabsetPanel(session, "mainTabs", selected = "Analysis Results")
     } else {
-      stop("Unsupported analysis type or missing parameters")
+      stop("Unsupported analysis type or missing parameters. Please ensure you have selected all required variables for the chosen analysis type.")
     }
     
   }, error = function(e) {
